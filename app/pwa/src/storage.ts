@@ -116,6 +116,53 @@ export async function saveCards(cards: readonly CardState[]): Promise<void> {
   });
 }
 
+// --- 保存領域の保護 ---
+//
+// ブラウザは容量が足りなくなると、使っていないサイトのデータから消していく
+// （least-recently-used）。ただし「永続モード」を与えられたオリジンは
+// その対象から外れる。Safari 17 / iOS 17 以降はホーム画面アプリとして
+// 開かれていることを根拠に、この要求をだいたい通してくれる。
+//
+// ここが通れば、ユーザーが手でバックアップを取らなくても消えなくなる。
+// 参考: https://webkit.org/blog/14403/updates-to-storage-policy/
+
+export type PersistState = "persisted" | "denied" | "unsupported";
+
+function storageManager(): StorageManager | null {
+  if (typeof navigator === "undefined") return null;
+  const s = navigator.storage;
+  return s && typeof s.persisted === "function" ? s : null;
+}
+
+/** いまの保存状態を調べる（要求はしない）。 */
+export async function persistState(): Promise<PersistState> {
+  const s = storageManager();
+  if (!s) return "unsupported";
+  try {
+    return (await s.persisted()) ? "persisted" : "denied";
+  } catch {
+    return "unsupported";
+  }
+}
+
+/**
+ * 永続モードを要求する。
+ *
+ * 断られても学習はできるので、例外は投げず状態だけ返す。
+ * ブラウザによってはユーザー操作の中でないと通らないので、
+ * 起動時と設定画面のボタンの両方から呼ぶ。
+ */
+export async function requestPersist(): Promise<PersistState> {
+  const s = storageManager();
+  if (!s || typeof s.persist !== "function") return "unsupported";
+  try {
+    if (await s.persisted()) return "persisted";
+    return (await s.persist()) ? "persisted" : "denied";
+  } catch {
+    return "unsupported";
+  }
+}
+
 // --- 連続正解数 ---
 
 /**

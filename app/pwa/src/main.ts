@@ -7,6 +7,7 @@ import { renderGroups } from "./groups.ts";
 import { renderStats } from "./stats.ts";
 import { renderSettings } from "./settings.ts";
 import { initSpeech } from "./speech.ts";
+import { requestPersist } from "./storage.ts";
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -104,5 +105,9 @@ registerSW({ immediate: true });
 
 // 読み上げ音声は非同期に揃うので先に用意しておく
 initSpeech();
+
+// 学習データがブラウザに消されないよう、起動のたびに永続モードを要求する。
+// 断られてもアプリは動くので結果は見ない（状態は設定画面で確認できる）。
+void requestPersist();
 
 void start();

@@ -6,7 +6,16 @@
 
 import type { App } from "./app.ts";
 import { speak } from "./speech.ts";
-import { clearAll, exportBackup, importBackup, saveMeta, type Backup } from "./storage.ts";
+import {
+  clearAll,
+  exportBackup,
+  importBackup,
+  persistState,
+  requestPersist,
+  saveMeta,
+  type Backup,
+  type PersistState,
+} from "./storage.ts";
 import { escapeHtml } from "./study.ts";
 
 export async function renderSettings(
@@ -19,12 +28,18 @@ export async function renderSettings(
     <h2>設定</h2>
 
     <div class="card">
-      <h3>バックアップ</h3>
-      <p class="warning">長く使わないと端末側で消えることがあります</p>
-      <div class="settings-actions" style="margin-top:14px">
-        <button class="primary" data-action="export">書き出す</button>
-        <button class="secondary" data-action="import">読み込む</button>
+      <h3>学習データの保存</h3>
+      <p class="note" data-role="persist">確認中…</p>
+      <div class="settings-actions" style="margin-top:12px" data-role="persist-action" hidden>
+        <button class="secondary" data-action="persist">消えないようにする</button>
       </div>
+      <details class="fold">
+        <summary>手動バックアップ</summary>
+        <div class="settings-actions" style="margin-top:12px">
+          <button class="secondary" data-action="export">書き出す</button>
+          <button class="secondary" data-action="import">読み込む</button>
+        </div>
+      </details>
       <input type="file" accept="application/json,.json" hidden data-role="file" />
     </div>
 
@@ -72,6 +87,27 @@ export async function renderSettings(
   `;
 
   const fileInput = root.querySelector<HTMLInputElement>('[data-role="file"]')!;
+
+  // 保存領域が保護されているか。要求はユーザー操作の中だと通りやすいので、
+  // 保護されていないときだけボタンを出す。
+  const persistText = root.querySelector<HTMLElement>('[data-role="persist"]')!;
+  const persistAction = root.querySelector<HTMLElement>('[data-role="persist-action"]')!;
+
+  const showPersist = (state: PersistState): void => {
+    persistText.textContent = {
+      persisted: "この端末に保存されています。勝手に消えません",
+      denied: "端末の空きが減ると消えることがあります",
+      unsupported: "このブラウザでは保護できません。ときどき書き出してください",
+    }[state];
+    persistAction.hidden = state !== "denied";
+  };
+
+  showPersist(await persistState());
+
+  root.querySelector<HTMLButtonElement>('[data-action="persist"]')!
+    .addEventListener("click", async () => {
+      showPersist(await requestPersist());
+    });
 
   root.querySelector<HTMLInputElement>('[data-role="speech"]')!
     .addEventListener("change", async (e) => {
