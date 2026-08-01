@@ -1,0 +1,63 @@
+name: Deploy PWA to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同時に走らせない。進行中のデプロイは完了させる。
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: app/pwa/package-lock.json
+
+      - name: Install
+        working-directory: app/pwa
+        run: npm ci
+
+      - name: Type check
+        working-directory: app/pwa
+        run: npx tsc --noEmit
+
+      # ロジック層が Python 参照実装と一致することを確認してからデプロイする
+      - name: Verify logic against reference implementation
+        working-directory: app/vocab-core
+        run: node src/verify.ts
+
+      - name: Build
+        working-directory: app/pwa
+        # GitHub Pages はリポジトリ名のサブディレクトリに配信されるため
+        # ベースパスを合わせる
+        env:
+          PWA_BASE: /${{ github.event.repository.name }}/
+        run: npm run build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: app/pwa/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

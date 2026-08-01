@@ -1,0 +1,23 @@
+# ダウンロードした元データ（再配布しない。step1 で再取得できる）
+sources/
+
+# パイプラインの中間生成物
+build/
+
+# Node
+node_modules/
+app/pwa/dist/
+app/pwa/dev-dist/
+
+# Swift（macOS が無いため未使用）
+app/VocabKit/.build/
+
+__pycache__/
+*.pyc
+.DS_Store
+
+# 注意:
+#   out/ と app/pwa/public/data/ は **コミットする**。
+#   - CI でビルドするために単語データが必要
+#   - CC BY-SA の ShareAlike 条項により、派生した辞書データは
+#     同ライセンスで公開する必要がある

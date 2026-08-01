@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "generated_at": "2026-08-01T05:58:14.022429+00:00",
+  "word_count": 1883,
+  "answer_script": "hiragana",
+  "words_per_group": 100,
+  "group_count": 19,
+  "license": "CC BY-SA 4.0",
+  "sources": [
+    "NGSL 1.2",
+    "NAWL 1.0",
+    "JMdict (EDRDG)"
+  ],
+  "attribution_required": true,
+  "synced_at": "2026-08-01T05:58:14.621Z"
+}

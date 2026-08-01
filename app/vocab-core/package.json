@@ -1,0 +1,13 @@
+{
+  "name": "vocab-core",
+  "version": "1.0.0",
+  "description": "英単語アプリのロジック層。UI に依存しないので PWA / React Native のどちらでもそのまま使える。",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "verify": "node src/verify.ts",
+    "test": "node src/verify.ts"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}

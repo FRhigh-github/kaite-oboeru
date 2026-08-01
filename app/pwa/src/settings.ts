@@ -1,0 +1,151 @@
+// 設定画面。
+//
+// **出典表示はライセンス上の必須要件**（CC BY-SA 4.0 / EDRDG）。
+// EDRDG のライセンスは起動画面での言及では不十分で、
+// メニューから開ける独立した画面での表示を求めている。削除しないこと。
+
+import type { App } from "./app.ts";
+import { clearAll, exportBackup, importBackup, saveMeta, type Backup } from "./storage.ts";
+import { escapeHtml } from "./study.ts";
+
+export async function renderSettings(
+  app: App,
+  root: HTMLElement,
+  baseUrl: string,
+  reload: () => void,
+): Promise<void> {
+  root.innerHTML = `
+    <h2>設定</h2>
+
+    <div class="card">
+      <h3 style="margin:0 0 10px;font-size:15px">学習データのバックアップ</h3>
+      <p class="warning">
+        iPhone のホーム画面アプリは、長く使わないと保存データが
+        端末側で消えることがあります。ときどき書き出して保管してください。
+      </p>
+      <div class="settings-actions" style="margin-top:14px">
+        <button class="primary" data-action="export">バックアップを書き出す</button>
+        <button class="secondary" data-action="import">バックアップを読み込む</button>
+      </div>
+      <input type="file" accept="application/json,.json" hidden data-role="file" />
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 10px;font-size:15px">発音</h3>
+      <label class="toggle-row">
+        <span>
+          問題が出たら自動で読み上げる
+          <span style="display:block;color:var(--text-dim);font-size:12px">
+            オフでも 🔊 ボタンでいつでも聞けます
+          </span>
+        </span>
+        <input type="checkbox" data-role="speech"
+               ${app.meta.speechEnabled ? "checked" : ""} />
+      </label>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 10px;font-size:15px">このアプリについて</h3>
+      <p style="font-size:14px;color:var(--text-dim);margin:0">
+        収録語数: ${app.vocabulary.words.length} 語<br>
+        学習開始日: ${escapeHtml(app.meta.dayZero)}（${app.today} 日目）
+      </p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 10px;font-size:15px">出典・ライセンス</h3>
+      <div class="attribution" data-role="attribution">読み込み中…</div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 10px;font-size:15px">データの消去</h3>
+      <p class="warning">学習記録がすべて消えます。取り消せません。</p>
+      <div class="settings-actions" style="margin-top:14px">
+        <button class="secondary" data-action="clear"
+          style="color:var(--wrong)">学習データを消去する</button>
+      </div>
+    </div>
+  `;
+
+  const fileInput = root.querySelector<HTMLInputElement>('[data-role="file"]')!;
+
+  root.querySelector<HTMLInputElement>('[data-role="speech"]')!
+    .addEventListener("change", async (e) => {
+      const on = (e.target as HTMLInputElement).checked;
+      app.meta = { ...app.meta, speechEnabled: on };
+      await saveMeta(app.meta);
+    });
+
+  root.querySelector<HTMLButtonElement>('[data-action="export"]')!
+    .addEventListener("click", async () => {
+      const backup = await exportBackup();
+      const blob = new Blob([JSON.stringify(backup, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `eitango-backup-${backup.exportedAt.slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+  root.querySelector<HTMLButtonElement>('[data-action="import"]')!
+    .addEventListener("click", () => fileInput.click());
+
+  fileInput.addEventListener("change", async () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+    try {
+      const backup = JSON.parse(await file.text()) as Backup;
+      if (!confirm("現在の学習データを、読み込むバックアップで置き換えます。よろしいですか？")) {
+        return;
+      }
+      await importBackup(backup);
+      alert("読み込みました。");
+      reload();
+    } catch (e) {
+      alert(`読み込めませんでした: ${e instanceof Error ? e.message : e}`);
+    } finally {
+      fileInput.value = "";
+    }
+  });
+
+  root.querySelector<HTMLButtonElement>('[data-action="clear"]')!
+    .addEventListener("click", async () => {
+      if (!confirm("学習データをすべて消去します。取り消せません。よろしいですか？")) return;
+      if (!confirm("本当によろしいですか？")) return;
+      await clearAll();
+      reload();
+    });
+
+  // 出典表示（ライセンス必須項目）
+  const target = root.querySelector<HTMLElement>('[data-role="attribution"]')!;
+  try {
+    const res = await fetch(`${baseUrl}data/ATTRIBUTION.md`);
+    target.innerHTML = renderMarkdownLite(await res.text());
+  } catch {
+    target.textContent =
+      "出典情報を読み込めませんでした。ネットワークに接続して再度お試しください。";
+  }
+}
+
+/**
+ * 出典表示のためだけの最小限の Markdown 描画。
+ * 見出し・リンク・箇条書きだけを扱う。汎用の Markdown 処理ではない。
+ */
+function renderMarkdownLite(md: string): string {
+  return md
+    .split("\n")
+    .map((line) => {
+      const escaped = escapeHtml(line)
+        .replace(/&lt;(https?:\/\/[^\s&]+)&gt;/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+      if (line.startsWith("### ")) return `<div style="font-weight:600;margin-top:12px">${escaped.slice(4)}</div>`;
+      if (line.startsWith("## ")) return `<div style="font-weight:600;margin-top:14px">${escaped.slice(3)}</div>`;
+      if (line.startsWith("# ")) return `<div style="font-weight:600;font-size:15px">${escaped.slice(2)}</div>`;
+      if (line.startsWith("- ")) return `<div style="margin-left:1em">・${escaped.slice(2)}</div>`;
+      return escaped;
+    })
+    .join("\n");
+}

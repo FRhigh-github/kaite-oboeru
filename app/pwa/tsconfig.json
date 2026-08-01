@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "types": ["vite/client", "vite-plugin-pwa/client", "node"]
+  },
+  "include": [
+    "src",
+    "vite.config.ts",
+    "scripts",
+    // ロジック層のうちブラウザで使うものだけ。
+    // verify.ts は Node 専用の検証 CLI なのでここには含めない。
+    "../vocab-core/src/normalizer.ts",
+    "../vocab-core/src/scheduler.ts",
+    "../vocab-core/src/rng.ts"
+  ]
+}
