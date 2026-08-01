@@ -112,9 +112,8 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
   container.className = "study";
   root.replaceChildren(container);
 
-  /** クリアまであと何回連続正解が要るか。 */
+  /** この語の連続正解数。 */
   const streak = streakOf(app, question.wordId);
-  const stepsLeft = Math.max(0, CLEAR_STREAK - streak);
 
   /**
    * 解答する。
@@ -145,11 +144,7 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
           <span>のこり ${total - cleared}</span>
         </div>
         <div class="question">
-          ${
-            firstTime
-              ? '<span class="badge">はじめて</span>'
-              : `<span class="badge streak-badge">${streakDots(streak)}</span>`
-          }
+          ${firstTime ? '<span class="badge">はじめて</span>' : streakMarks(streak)}
           <div class="word-row">
             <span class="word">${escapeHtml(word.word)}</span>
             <button class="speak-btn" data-speak aria-label="発音を聞く">🔊</button>
@@ -287,10 +282,26 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
   draw();
 }
 
-/** 連続正解数を ●●○ で表す。 */
-function streakDots(streak: number): string {
-  const done = Math.min(streak, CLEAR_STREAK);
-  return "●".repeat(done) + "○".repeat(CLEAR_STREAK - done);
+/**
+ * クリアまでの進み具合。
+ *
+ * 丸を CLEAR_STREAK 個並べ、正解したぶんだけチェックを入れる。
+ * 文字の ●○ だけでは何を表しているのか伝わらなかったので、
+ * 「あと◯回」の短い添え字もつけている。
+ *
+ * @param justFilled 直前の正解で埋まった丸を目立たせる
+ */
+function streakMarks(streak: number, justFilled = false): string {
+  const done = Math.min(Math.max(streak, 0), CLEAR_STREAK);
+  const marks = Array.from({ length: CLEAR_STREAK }, (_, i) => {
+    const on = i < done;
+    const fresh = on && justFilled && i === done - 1;
+    return `<i class="${on ? "on" : ""}${fresh ? " fresh" : ""}"></i>`;
+  }).join("");
+  const left = CLEAR_STREAK - done;
+  return `<span class="streak">${marks}<b>${
+    left === 0 ? "クリア！" : `あと${left}回`
+  }</b></span>`;
 }
 
 /**
@@ -299,10 +310,8 @@ function streakDots(streak: number): string {
  */
 function streakPreview(judgement: string, streak: number): string {
   if (judgement === "unsure") return "";
-  if (judgement !== "correct") return streakDots(0);
-  const next = streak + 1;
-  if (next >= CLEAR_STREAK) return `${streakDots(CLEAR_STREAK)} クリア！`;
-  return streakDots(next);
+  if (judgement !== "correct") return streakMarks(0);
+  return streakMarks(streak + 1, true);
 }
 
 /**

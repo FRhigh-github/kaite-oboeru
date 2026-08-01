@@ -236,11 +236,63 @@ h3 {
   line-height: 1.5;
 }
 
-.streak-badge {
-  padding: 0 16px;
-  font-size: 15px;
-  letter-spacing: 0.2em;
-  text-indent: 0.2em;
+/* ---------- クリアまでの進み具合 ----------
+   3個の丸に、正解したぶんだけチェックが入る。 */
+
+.streak {
+  display: inline-flex;
+  align-self: center;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.streak i {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--paper);
+}
+
+.streak i.on {
+  background: var(--correct);
+  border-color: var(--correct);
+}
+
+.streak i.on::after {
+  content: "✓";
+  position: absolute;
+  inset: 0;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+/* 直前の正解で埋まった丸だけ跳ねさせる。どれが増えたのか一目で分かる。 */
+.streak i.fresh {
+  animation: pop 0.45s ease-out;
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(0.4);
+  }
+  60% {
+    transform: scale(1.3);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.streak b {
+  margin-left: 2px;
+  font-size: 14px;
+  font-weight: 700;
 }
 
 /* ---------- 解答表示（IME を使わないので input ではない） ----------
@@ -328,11 +380,12 @@ h3 {
 
 /* 何も入力していないときの送信キー。
    押すとそのまま不正解になるので、「こたえる」と同じ見た目にしない。 */
+/* 押すとその場で不正解になるので、赤にして「まちがい」と分かるようにする。 */
 .kk-submit.kk-giveup {
-  background: var(--paper);
-  color: var(--ink-dim);
-  border: 2px dashed var(--ink-dim);
-  font-weight: 400;
+  background: var(--wrong);
+  color: #fff;
+  border: none;
+  font-weight: 700;
 }
 
 /* 「こたえる」を右列の縦長ボタンにする（3行ぶん） */
@@ -464,9 +517,11 @@ h3 {
   padding: 6px 0;
   text-align: center;
   color: #fff;
-  font-size: 15px;
-  letter-spacing: 0.18em;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.streak-line .streak {
+  margin-bottom: 0;
 }
 
 /* 「惜しい」のときは中身が空。高さは残して詰まらないようにする。 */
