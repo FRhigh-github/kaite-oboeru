@@ -50,6 +50,8 @@ export interface AppMeta {
   speechEnabled: boolean;
   /** 読み上げの音量 (0..1)。端末の音量とは別に下げられるようにする。 */
   speechVolume: number;
+  /** 最後にバックアップを書き出した日 (dayZero からの日数)。-1 = 未実施。 */
+  lastBackupDay: number;
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null;

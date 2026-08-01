@@ -21,6 +21,7 @@ import {
   WORKING_SET,
   type App,
 } from "./app.ts";
+import { backupDue, saveBackup } from "./backup.ts";
 import { KanaKeyboard } from "./kana-keyboard.ts";
 import { speak } from "./speech.ts";
 import { appendLog, saveCard, saveMeta, saveProgress } from "./storage.ts";
@@ -50,9 +51,31 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
       <span class="part-action">パートを<br>えらぶ<span class="part-chevron">›</span></span>
     </button>`;
 
+  // --- バックアップの呼びかけ -------------------------------------------
+  // 端末の初期化やアプリの削除では、端末内のデータはどうやっても消える。
+  // 使い始めてしばらくたったときと、そのあと月に一度だけ声をかける。
+  const notice =
+    backupDue(app) && !app.backupNoticeClosed
+      ? `<div class="notice">
+           <span>学習データを保存しておきませんか</span>
+           <span class="notice-actions">
+             <button data-backup>保存</button>
+             <button data-backup-close aria-label="閉じる">×</button>
+           </span>
+         </div>`
+      : "";
+
   const bindPartBar = () => {
     root.querySelector<HTMLButtonElement>("[data-part]")?.addEventListener("click", () => {
       app.partPickerOpen = true;
+      rerender();
+    });
+    root.querySelector<HTMLButtonElement>("[data-backup]")?.addEventListener("click", async () => {
+      if (await saveBackup(app)) app.backupNoticeClosed = true;
+      rerender();
+    });
+    root.querySelector<HTMLButtonElement>("[data-backup-close]")?.addEventListener("click", () => {
+      app.backupNoticeClosed = true;
       rerender();
     });
   };
@@ -94,7 +117,7 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
     });
     if (nextId === null) {
       root.innerHTML = `
-        ${partBar}
+        ${partBar}${notice}
         <div class="empty">
           <p class="empty-big">パート ${currentPart} 完了！</p>
           <p>${total} 語すべてクリア</p>
@@ -150,7 +173,7 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
   function draw(): void {
     if (question.phase.kind === "asking") {
       container.innerHTML = `
-        ${partBar}
+        ${partBar}${notice}
         <div class="question">
           ${firstTime ? '<span class="badge">はじめて</span>' : streakMarks(streak)}
           <div class="word-row">
@@ -189,7 +212,7 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
       const others = word.answers.filter((a) => a !== word.reading).slice(0, 3);
 
       container.innerHTML = `
-        ${partBar}
+        ${partBar}${notice}
         <div class="result ${judgement}">
           <div class="verdict">${verdict}</div>
           <div class="word-row">

@@ -676,6 +676,49 @@ button.secondary.danger {
   line-height: 1;
 }
 
+/* ---------- 呼びかけ（バックアップ） ----------
+   月に一度しか出さないので、小さめの付箋で控えめに置く。 */
+
+.notice {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 8px 7px 12px;
+  border-radius: var(--radius);
+  background: var(--sticky-purple);
+  font-size: 13px;
+  transform: rotate(0.4deg);
+  box-shadow: 0 3px 6px rgba(60, 35, 10, 0.4);
+}
+
+.notice-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.notice button {
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.notice button[data-backup-close] {
+  border: none;
+  background: none;
+  font-size: 17px;
+  padding: 4px 6px;
+}
+
 /* ---------- 空の状態 ---------- */
 
 .empty {

@@ -146,6 +146,8 @@ export interface App {
   answeredThisSession: number;
   /** 初見の語を出してから何問たったか。初見が固まって出るのを防ぐ。 */
   questionsSinceNew: number;
+  /** バックアップの呼びかけを「あとで」で閉じたか（この起動のあいだだけ） */
+  backupNoticeClosed: boolean;
   /**
    * 学習画面でパート選択を出しているか。
    * パート選択と学習を別タブに分けると行き来がややこしいので、
@@ -180,6 +182,7 @@ export async function boot(baseUrl: string): Promise<App> {
       selectedGroups: [1],
       speechEnabled: true,
       speechVolume: 1,
+      lastBackupDay: -1,
     };
     await saveMeta(meta);
   }
@@ -187,13 +190,15 @@ export async function boot(baseUrl: string): Promise<App> {
   if (
     !Array.isArray(meta.selectedGroups) ||
     typeof meta.speechEnabled !== "boolean" ||
-    typeof meta.speechVolume !== "number"
+    typeof meta.speechVolume !== "number" ||
+    typeof meta.lastBackupDay !== "number"
   ) {
     meta = {
       ...meta,
       selectedGroups: Array.isArray(meta.selectedGroups) ? meta.selectedGroups : [1],
       speechEnabled: typeof meta.speechEnabled === "boolean" ? meta.speechEnabled : true,
       speechVolume: typeof meta.speechVolume === "number" ? meta.speechVolume : 1,
+      lastBackupDay: typeof meta.lastBackupDay === "number" ? meta.lastBackupDay : -1,
     };
     await saveMeta(meta);
   }
@@ -229,6 +234,7 @@ export async function boot(baseUrl: string): Promise<App> {
     today,
     answeredThisSession: 0,
     questionsSinceNew: 99,
+    backupNoticeClosed: false,
     partPickerOpen: false,
     current: null,
   };

@@ -5,10 +5,10 @@
 // メニューから開ける独立した画面での表示を求めている。削除しないこと。
 
 import type { App } from "./app.ts";
+import { canShareFiles, lastBackupText, saveBackup } from "./backup.ts";
 import { speak } from "./speech.ts";
 import {
   clearAll,
-  exportBackup,
   importBackup,
   persistState,
   requestPersist,
@@ -33,13 +33,24 @@ export async function renderSettings(
       <div class="settings-actions" style="margin-top:12px" data-role="persist-action" hidden>
         <button class="secondary" data-action="persist">消えないようにする</button>
       </div>
-      <details class="fold">
-        <summary>手動バックアップ</summary>
-        <div class="settings-actions" style="margin-top:12px">
-          <button class="secondary" data-action="export">書き出す</button>
-          <button class="secondary" data-action="import">読み込む</button>
+
+      <div class="slider-row">
+        <div class="slider-head">
+          <span>控えを取る</span>
+          <span class="note" data-role="last-backup">${lastBackupText(app)}</span>
         </div>
-      </details>
+        <div class="settings-actions" style="margin-top:10px">
+          <button class="secondary" data-action="export">${
+            canShareFiles() ? "ファイルに保存" : "書き出す"
+          }</button>
+        </div>
+        <details class="fold">
+          <summary>控えから戻す</summary>
+          <div class="settings-actions" style="margin-top:12px">
+            <button class="secondary" data-action="import">読み込む</button>
+          </div>
+        </details>
+      </div>
       <input type="file" accept="application/json,.json" hidden data-role="file" />
     </div>
 
@@ -136,16 +147,9 @@ export async function renderSettings(
 
   root.querySelector<HTMLButtonElement>('[data-action="export"]')!
     .addEventListener("click", async () => {
-      const backup = await exportBackup();
-      const blob = new Blob([JSON.stringify(backup, null, 2)], {
-        type: "application/json",
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `eitango-backup-${backup.exportedAt.slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+      await saveBackup(app);
+      root.querySelector<HTMLElement>('[data-role="last-backup"]')!.textContent =
+        lastBackupText(app);
     });
 
   root.querySelector<HTMLButtonElement>('[data-action="import"]')!
