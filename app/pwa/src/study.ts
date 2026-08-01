@@ -14,7 +14,8 @@ import {
   isCleared,
   streakOf,
   CLEAR_STREAK,
-  NEW_INTAKE,
+  COOLDOWN,
+  FIRST_BATCH,
   POS_LABEL,
   STREAK_WEIGHT,
   WORKING_SET,
@@ -61,18 +62,27 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
   // 出題は連続正解数で決める。日付は見ない。
   //   ・クリア済み（3回連続正解）の語は出さない
   //   ・間違えた直後の語がいちばん出やすく、正解を重ねるほど出にくくなる
-  //   ・抱えている未クリアの語が減ったら新しい語を入れる
+  //   ・一度出た語は COOLDOWN 問ぶん空けてから出す
   const clearedIds = new Set<number>();
   let inProgress = 0;
-  let notYetCorrect = 0;
   for (const id of pool.keys()) {
-    if (isCleared(app, id)) {
-      clearedIds.add(id);
-    } else if (!isNew(pool.get(id)!)) {
-      inProgress++;
-      if (streakOf(app, id) === 0) notYetCorrect++;
-    }
+    if (isCleared(app, id)) clearedIds.add(id);
+    else if (!isNew(pool.get(id)!)) inProgress++;
   }
+
+  // 新しい語を入れるか。
+  //
+  // 出題間隔を空けるには回す語が COOLDOWN より多く要るので、
+  // そこに届くまでは速く、届いたあとはゆっくり入れる。
+  // ただし最初の FIRST_BATCH 語を過ぎたら初見が続かないようにする
+  // （初見ばかりが並ぶと全滅して手応えが無い）。
+  const introduceNew =
+    inProgress < WORKING_SET &&
+    (inProgress < FIRST_BATCH
+      ? true
+      : inProgress <= COOLDOWN
+        ? app.questionsSinceNew >= 1
+        : app.questionsSinceNew >= 2);
 
   if (app.current === null) {
     const nextId = app.scheduler.nextWord(pool, app.today, app.meta.introducedToday, {
@@ -80,8 +90,7 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
       exclude: clearedIds,
       weightOf: (state: CardState) =>
         STREAK_WEIGHT[Math.min(streakOf(app, state.wordId), STREAK_WEIGHT.length - 1)],
-      // まだ一度も正解できていない語を抱えすぎているうちは新しい語を入れない
-      introduceNew: inProgress < WORKING_SET && notYetCorrect < NEW_INTAKE,
+      introduceNew,
     });
     if (nextId === null) {
       root.innerHTML = `
@@ -93,6 +102,9 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
       bindPartBar();
       return;
     }
+    // 初見が固まって出ないよう、初見からの間隔を数えておく
+    app.questionsSinceNew = isNew(pool.get(nextId)!) ? 0 : app.questionsSinceNew + 1;
+
     app.current = {
       wordId: nextId,
       shownAt: performance.now(),
@@ -139,10 +151,6 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
     if (question.phase.kind === "asking") {
       container.innerHTML = `
         ${partBar}
-        <div class="progress">
-          <span>${app.answeredThisSession} 問</span>
-          <span>のこり ${total - cleared}</span>
-        </div>
         <div class="question">
           ${firstTime ? '<span class="badge">はじめて</span>' : streakMarks(streak)}
           <div class="word-row">

@@ -35,7 +35,8 @@ const LAYOUT: KeyDef[] = [
   { kind: "flick", label: "あ", flick: ["あ", "い", "う", "え", "お"] },
   { kind: "flick", label: "か", flick: ["か", "き", "く", "け", "こ"] },
   { kind: "flick", label: "さ", flick: ["さ", "し", "す", "せ", "そ"] },
-  { kind: "fn", label: "⌫", fn: "back" },
+  // ⌫ の記号は端末によって極端に小さく描かれるので文字で書く
+  { kind: "fn", label: "けす", fn: "back" },
 
   { kind: "flick", label: "た", flick: ["た", "ち", "つ", "て", "と"] },
   { kind: "flick", label: "な", flick: ["な", "に", "ぬ", "ね", "の"] },

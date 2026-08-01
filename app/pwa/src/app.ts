@@ -6,6 +6,7 @@
 
 import type { Judgement } from "../../vocab-core/src/normalizer.ts";
 import {
+  DEFAULT_SCHEDULER_CONFIG,
   Scheduler,
   newCard,
   type CardState,
@@ -76,18 +77,28 @@ export const CLEAR_STREAK = 3;
 export const STREAK_WEIGHT = [4, 1.5, 0.6];
 
 /**
- * 同時に抱える未クリアの語数の上限。
- * 多すぎると1周が遠くて手応えが無く、少なすぎると同じ語ばかり出て飽きる。
+ * 一度出た語を、次に出すまで空ける問題数。
+ *
+ * 直前に出たばかりの語が続けて出ると、覚えていなくても答えられてしまう。
  */
-export const WORKING_SET = 12;
+export const COOLDOWN = 25;
 
 /**
- * 「まだ一度も正解していない語」をこの数まで同時に抱える。
+ * 同時に抱える未クリアの語数の上限。
  *
- * これが無いと、最初の十数問がすべて初見の語になって全滅する。
- * 数語ずつ入れて、正解できるようになったぶんだけ次を入れる。
+ * COOLDOWN より十分多く持つ必要がある。抱えている語が COOLDOWN 以下だと
+ * 出せる語が無くなり、間隔を空ける決まりのほうが破られてしまう。
  */
-export const NEW_INTAKE = 4;
+export const WORKING_SET = COOLDOWN + 8;
+
+/**
+ * 学習を始めたとき、最初に続けて出す初見の語の数。
+ *
+ * 出題間隔を空けるには、回す語をある程度そろえる必要がある。
+ * かといって最初から30語を初見で並べると全滅するので、
+ * まずこの数だけ入れ、そのあとは初見と復習を交互にして増やしていく。
+ */
+export const FIRST_BATCH = 8;
 
 /** その語の連続正解数。 */
 export function streakOf(app: App, wordId: number): number {
@@ -133,6 +144,8 @@ export interface App {
   current: CurrentQuestion | null;
   /** この起動で解答した回数（統計表示用） */
   answeredThisSession: number;
+  /** 初見の語を出してから何問たったか。初見が固まって出るのを防ぐ。 */
+  questionsSinceNew: number;
   /**
    * 学習画面でパート選択を出しているか。
    * パート選択と学習を別タブに分けると行き来がややこしいので、
@@ -215,6 +228,7 @@ export async function boot(baseUrl: string): Promise<App> {
     meta,
     today,
     answeredThisSession: 0,
+    questionsSinceNew: 99,
     partPickerOpen: false,
     current: null,
   };
@@ -251,7 +265,12 @@ export function buildScheduler(
     reading: w.reading,
     difficulty: Math.floor(i / ORDER_BUCKET),
   }));
-  return new Scheduler(schedulerWords, meta.seed);
+  // 同じ語がすぐ出てこないよう、既定より長く間隔を空ける。
+  // （既定値は Python 参照実装と揃える必要があるので、ここで上書きする）
+  return new Scheduler(schedulerWords, meta.seed, {
+    ...DEFAULT_SCHEDULER_CONFIG,
+    cooldownWindow: COOLDOWN,
+  });
 }
 
 /** 選択中のグループに属するカードだけを返す。 */
