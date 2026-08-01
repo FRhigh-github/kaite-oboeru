@@ -15,7 +15,6 @@ import {
   streakOf,
   CLEAR_STREAK,
   dueAtOf,
-  FIRST_BATCH,
   GAP_CORRECT,
   GAP_WRONG,
   POS_LABEL,
@@ -87,25 +86,24 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
   // 出題は「解いた問題数」で決める。日付は見ない。
   //   ・クリア済み（3回連続正解）の語は出さない
   //   ・まちがえた語は GAP_WRONG 問後、あたった語は GAP_CORRECT 問後に戻す
-  //   ・そのなかで最も待たせている語から順に出す（同着なら抽選）
+  //   ・出す予定が来た語のうち、最も待たせている語から出す（同着なら抽選）
   const clearedIds = new Set<number>();
   let inProgress = 0;
-  for (const id of pool.keys()) {
+  let dueNow = 0;
+  for (const [id, card] of pool) {
     if (isCleared(app, id)) clearedIds.add(id);
-    else if (!isNew(pool.get(id)!)) inProgress++;
+    else if (!isNew(card)) {
+      inProgress++;
+      if (dueAtOf(app, id) <= app.meta.askedCount) dueNow++;
+    }
   }
 
   // 新しい語を入れるか。
   //
-  // 40問の間隔を空けるには回す語が WORKING_SET ぶん要るので、
-  // そこに届くまでは入れつづける。
-  // ただし最初の FIRST_BATCH 語を過ぎたら初見が続かないようにする
-  // （初見ばかりが並ぶと全滅して手応えが無い）。
-  const introduceNew =
-    inProgress < WORKING_SET &&
-    (inProgress < FIRST_BATCH
-      ? true
-      : app.questionsSinceNew >= 1);
+  // 出す予定が来た語が1つも無いときだけ入れる。
+  // ここで予定前の語を繰り上げて出すと、間隔の決まりが崩れて
+  // 「さっき出た語がまた出る」ことになる。空いた枠は初見で埋める。
+  const introduceNew = inProgress < WORKING_SET && dueNow === 0;
 
   if (app.current === null) {
     const nextId = app.scheduler.nextWord(pool, app.today, app.meta.introducedToday, {
@@ -128,9 +126,6 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
       bindPartBar();
       return;
     }
-    // 初見が固まって出ないよう、初見からの間隔を数えておく
-    app.questionsSinceNew = isNew(pool.get(nextId)!) ? 0 : app.questionsSinceNew + 1;
-
     app.current = {
       wordId: nextId,
       shownAt: performance.now(),
@@ -203,6 +198,7 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
           box.style.fontSize = `${answerFontSize(v)}px`;
         },
         onSubmit: submit,
+        toggleInput: app.meta.toggleInput,
       });
       keyboard.mount(container.querySelector<HTMLElement>(".keyboard-slot")!);
       // 入力途中でタブを移動しても消えないよう復元する

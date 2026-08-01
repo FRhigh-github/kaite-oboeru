@@ -54,10 +54,15 @@ export interface AppMeta {
   lastBackupDay: number;
   /**
    * これまでに解答した総問題数。
-   * 「まちがえた語は20問後、あたった語は40問後」という間隔を数えるための時計。
+   * 「まちがえた語は◯問後、あたった語は◯問後」という間隔を数えるための時計。
    * 日付ではなく問題数で数えるので、途中でアプリを閉じても間隔は保たれる。
    */
   askedCount: number;
+  /**
+   * キーの連打で あ→い→う と巡回するトグル入力を使うか。
+   * 切ると、中央の文字はタップ・それ以外はフリックだけで入る。
+   */
+  toggleInput: boolean;
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null;

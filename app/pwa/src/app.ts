@@ -83,14 +83,14 @@ export const STREAK_WEIGHT = [4, 1.5, 0.6];
  *
  * 短すぎると直前の記憶で答えられてしまい、長すぎると忘れきってしまう。
  */
-export const GAP_WRONG = 20;
+export const GAP_WRONG = 25;
 
 /**
  * あたった語を、次に出すまで空ける問題数。
  *
  * まちがえた語より倍の間隔を置き、思い出す手間がかかる状態で再会させる。
  */
-export const GAP_CORRECT = 40;
+export const GAP_CORRECT = 50;
 
 /**
  * 一度出た語を、次に出すまで最低限空ける問題数。
@@ -104,18 +104,9 @@ export const COOLDOWN = 10;
  * 同時に抱える未クリアの語数の上限。
  *
  * GAP_CORRECT より多く持つ必要がある。抱えている語がそれ以下だと
- * 40問空ける前に一周してしまい、間隔の決まりのほうが破られてしまう。
+ * 予定より早く一周してしまい、間隔の決まりのほうが破られてしまう。
  */
 export const WORKING_SET = GAP_CORRECT + 4;
-
-/**
- * 学習を始めたとき、最初に続けて出す初見の語の数。
- *
- * 出題間隔を空けるには、回す語をある程度そろえる必要がある。
- * かといって最初から30語を初見で並べると全滅するので、
- * まずこの数だけ入れ、そのあとは初見と復習を交互にして増やしていく。
- */
-export const FIRST_BATCH = 8;
 
 /** その語の連続正解数。 */
 export function streakOf(app: App, wordId: number): number {
@@ -166,8 +157,6 @@ export interface App {
   current: CurrentQuestion | null;
   /** この起動で解答した回数（統計表示用） */
   answeredThisSession: number;
-  /** 初見の語を出してから何問たったか。初見が固まって出るのを防ぐ。 */
-  questionsSinceNew: number;
   /** バックアップの呼びかけを「あとで」で閉じたか（この起動のあいだだけ） */
   backupNoticeClosed: boolean;
   /**
@@ -206,6 +195,7 @@ export async function boot(baseUrl: string): Promise<App> {
       speechVolume: 1,
       lastBackupDay: -1,
       askedCount: 0,
+      toggleInput: true,
     };
     await saveMeta(meta);
   }
@@ -215,7 +205,8 @@ export async function boot(baseUrl: string): Promise<App> {
     typeof meta.speechEnabled !== "boolean" ||
     typeof meta.speechVolume !== "number" ||
     typeof meta.lastBackupDay !== "number" ||
-    typeof meta.askedCount !== "number"
+    typeof meta.askedCount !== "number" ||
+    typeof meta.toggleInput !== "boolean"
   ) {
     meta = {
       ...meta,
@@ -224,6 +215,7 @@ export async function boot(baseUrl: string): Promise<App> {
       speechVolume: typeof meta.speechVolume === "number" ? meta.speechVolume : 1,
       lastBackupDay: typeof meta.lastBackupDay === "number" ? meta.lastBackupDay : -1,
       askedCount: typeof meta.askedCount === "number" ? meta.askedCount : 0,
+      toggleInput: typeof meta.toggleInput === "boolean" ? meta.toggleInput : true,
     };
     await saveMeta(meta);
   }
@@ -258,7 +250,6 @@ export async function boot(baseUrl: string): Promise<App> {
     meta,
     today,
     answeredThisSession: 0,
-    questionsSinceNew: 99,
     backupNoticeClosed: false,
     partPickerOpen: false,
     current: null,

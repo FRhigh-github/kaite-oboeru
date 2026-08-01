@@ -113,6 +113,11 @@ const TOGGLE_WINDOW_MS = 900;
 export interface KanaKeyboardOptions {
   onChange?(value: string): void;
   onSubmit?(value: string): void;
+  /**
+   * トグル入力を使うか。既定は使う。
+   * 切ると、タップは常に中央の文字を足すだけになる（フリックは変わらない）。
+   */
+  toggleInput?: boolean;
 }
 
 export class KanaKeyboard {
@@ -247,6 +252,10 @@ export class KanaKeyboard {
    * 巡回はせず、素直に先頭の文字を足す。
    */
   private tapToggle(keyId: number, flick: FlickSet): void {
+    if (this.options.toggleInput === false) {
+      this.append(flick[0]);
+      return;
+    }
     const ring = flick.filter(Boolean); // 文字の無い方向は飛ばす
     const now = Date.now();
     const t = this.toggle;
@@ -340,6 +349,7 @@ function renderKey(def: KeyDef, i: number): string {
   }
   const classes = ["kk-key", "kk-fn"];
   if (def.fn === "submit") classes.push("kk-submit");
+  if (def.fn === "back") classes.push("kk-back");
   if (def.tall) classes.push("kk-tall");
   return `<button type="button" class="${classes.join(" ")}" data-i="${i}">${def.label}</button>`;
 }

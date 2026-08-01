@@ -55,6 +55,16 @@ export async function renderSettings(
     </div>
 
     <div class="card">
+      <h3>キーボード</h3>
+      <label class="toggle-row">
+        <span>連打で あ→い→う（トグル入力）</span>
+        <input type="checkbox" data-role="toggle-input"
+               ${app.meta.toggleInput ? "checked" : ""} />
+      </label>
+      <p class="note">切ると、タップは中央の文字だけ。ほかの文字はフリックで入れます。</p>
+    </div>
+
+    <div class="card">
       <h3>発音</h3>
       <label class="toggle-row">
         <span>自動で読み上げる</span>
@@ -118,6 +128,13 @@ export async function renderSettings(
   root.querySelector<HTMLButtonElement>('[data-action="persist"]')!
     .addEventListener("click", async () => {
       showPersist(await requestPersist());
+    });
+
+  root.querySelector<HTMLInputElement>('[data-role="toggle-input"]')!
+    .addEventListener("change", async (e) => {
+      const on = (e.target as HTMLInputElement).checked;
+      app.meta = { ...app.meta, toggleInput: on };
+      await saveMeta(app.meta);
     });
 
   root.querySelector<HTMLInputElement>('[data-role="speech"]')!

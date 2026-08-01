@@ -377,21 +377,28 @@ h3 {
   font-weight: 700;
 }
 
+/* 「こたえる」は青。押すと判定に進む。 */
 .kk-submit {
-  background: var(--ink);
-  color: var(--paper);
+  background: var(--accent);
+  color: #fff;
   font-weight: 700;
   font-size: 16px;
 }
 
 /* 何も入力していないときの送信キー。
-   押すとそのまま不正解になるので、「こたえる」と同じ見た目にしない。 */
-/* 押すとその場で不正解になるので、赤にして「まちがい」と分かるようにする。 */
+   押すとその場で不正解になるので、「こたえる」と同じ見た目にしない。
+   黄色（注意）にして、赤の「けす」とも青の「こたえる」とも区別する。 */
 .kk-submit.kk-giveup {
-  background: var(--wrong);
-  color: #fff;
+  background: var(--sticky);
+  color: var(--ink);
   border: none;
   font-weight: 700;
+}
+
+/* 「けす」は赤。取り消しの操作だと一目で分かるようにする。 */
+.kk-back {
+  background: var(--wrong);
+  color: #fff;
 }
 
 /* 「こたえる」を右列の縦長ボタンにする（3行ぶん） */
