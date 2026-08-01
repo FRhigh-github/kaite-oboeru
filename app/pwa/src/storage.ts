@@ -6,11 +6,12 @@
 import type { CardState } from "../../vocab-core/src/scheduler.ts";
 
 const DB_NAME = "eitango";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 const STORE_CARDS = "cards";
 const STORE_META = "meta";
 const STORE_LOG = "log";
+const STORE_PROGRESS = "progress";
 
 /**
  * 解答1回の記録。
@@ -68,6 +69,9 @@ function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_LOG)) {
         db.createObjectStore(STORE_LOG, { keyPath: "id", autoIncrement: true });
       }
+      if (!db.objectStoreNames.contains(STORE_PROGRESS)) {
+        db.createObjectStore(STORE_PROGRESS, { keyPath: "wordId" });
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -110,6 +114,31 @@ export async function saveCards(cards: readonly CardState[]): Promise<void> {
     t.oncomplete = () => resolve();
     t.onerror = () => reject(t.error);
   });
+}
+
+// --- 連続正解数 ---
+
+/**
+ * 1語ぶんの「クリアまでの進み具合」。
+ *
+ * FSRS のカード状態（出題間隔）とは別に持つ。
+ * ユーザーから見える達成条件は日付ではなく「3回連続で正解」なので、
+ * 経過日数に左右されない素のカウンタが要る。
+ */
+export interface WordProgress {
+  wordId: number;
+  /** 連続正解数。まちがえたら 0 に戻る。 */
+  streak: number;
+  /** まちがえた回数の累計（苦手な語の表示に使う） */
+  misses: number;
+}
+
+export async function loadProgress(): Promise<WordProgress[]> {
+  return tx<WordProgress[]>(STORE_PROGRESS, "readonly", (s) => s.getAll());
+}
+
+export async function saveProgress(p: WordProgress): Promise<void> {
+  await tx(STORE_PROGRESS, "readwrite", (s) => s.put(p));
 }
 
 // --- メタ情報 ---
@@ -168,13 +197,16 @@ export interface Backup {
   meta: AppMeta | null;
   cards: CardState[];
   logs: ReviewLog[];
+  /** version 1 のバックアップには無い */
+  progress?: WordProgress[];
 }
 
 export async function exportBackup(): Promise<Backup> {
-  const [meta, cards, logs] = await Promise.all([
+  const [meta, cards, logs, progress] = await Promise.all([
     loadMeta(),
     loadCards(),
     loadLogs(),
+    loadProgress(),
   ]);
   return {
     format: "eitango-backup",
@@ -183,6 +215,7 @@ export async function exportBackup(): Promise<Backup> {
     meta,
     cards,
     logs,
+    progress,
   };
 }
 
@@ -192,10 +225,13 @@ export async function importBackup(backup: Backup): Promise<void> {
   }
   const db = await openDB();
   await new Promise<void>((resolve, reject) => {
-    const t = db.transaction([STORE_CARDS, STORE_META, STORE_LOG], "readwrite");
+    const t = db.transaction(
+      [STORE_CARDS, STORE_META, STORE_LOG, STORE_PROGRESS], "readwrite");
     t.objectStore(STORE_CARDS).clear();
     t.objectStore(STORE_LOG).clear();
+    t.objectStore(STORE_PROGRESS).clear();
     for (const c of backup.cards ?? []) t.objectStore(STORE_CARDS).put(c);
+    for (const p of backup.progress ?? []) t.objectStore(STORE_PROGRESS).put(p);
     for (const l of backup.logs ?? []) {
       const { id, ...rest } = l;
       t.objectStore(STORE_LOG).add(rest as ReviewLog);
@@ -210,10 +246,12 @@ export async function importBackup(backup: Backup): Promise<void> {
 export async function clearAll(): Promise<void> {
   const db = await openDB();
   await new Promise<void>((resolve, reject) => {
-    const t = db.transaction([STORE_CARDS, STORE_META, STORE_LOG], "readwrite");
+    const t = db.transaction(
+      [STORE_CARDS, STORE_META, STORE_LOG, STORE_PROGRESS], "readwrite");
     t.objectStore(STORE_CARDS).clear();
     t.objectStore(STORE_META).clear();
     t.objectStore(STORE_LOG).clear();
+    t.objectStore(STORE_PROGRESS).clear();
     t.oncomplete = () => resolve();
     t.onerror = () => reject(t.error);
   });

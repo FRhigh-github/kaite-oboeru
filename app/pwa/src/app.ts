@@ -7,9 +7,7 @@
 import type { Judgement } from "../../vocab-core/src/normalizer.ts";
 import {
   Scheduler,
-  isNew,
   newCard,
-  retrievability,
   type CardState,
   type SchedulerWord,
 } from "../../vocab-core/src/scheduler.ts";
@@ -17,9 +15,11 @@ import {
   dayIndex,
   loadCards,
   loadMeta,
+  loadProgress,
   localDateString,
   saveMeta,
   type AppMeta,
+  type WordProgress,
 } from "./storage.ts";
 
 export interface Word {
@@ -60,31 +60,43 @@ export const POS_LABEL: Record<string, string> = {
 };
 
 /**
- * 「覚えた」とみなす基準（日数）。
+ * この回数だけ連続で正解したらクリア。
  *
- * 今日時点の想起率で判定してはいけない。解答した直後は経過日数が0なので
- * 想起率は必ず 1.0 になり、**間違えた語まで「覚えた」に数えられてしまう**。
- * そこで「最後に解答した日から MASTERED_HORIZON_DAYS 日たっても
- * 思い出せる見込みか」で判定する。間違えると安定度が下がるので、
- * 間違えた語は自動的に基準から外れる。
+ * 日付や想起率ではなく「連続正解」を達成条件にしている。
+ * 経過日数で判定すると、解答直後は必ず想起率 1.0 になるので
+ * 間違えた語まで「覚えた」に数えられてしまううえ、
+ * 何をすれば進むのかがユーザーから見えない。
  */
-export const MASTERED_HORIZON_DAYS = 7;
-
-/** この想起率以上を「覚えた」とみなす。 */
-export const MASTERED_THRESHOLD = 0.9;
+export const CLEAR_STREAK = 3;
 
 /**
- * 定着度スコア。MASTERED_HORIZON_DAYS 日後にまだ思い出せる確率。
- * 解答した日に左右されないので、日をまたいでも表示がぶれない。
+ * 出題の重み（連続正解数ごと）。
+ * 間違えた直後（0回）がいちばん出やすく、正解を重ねるほど出にくくなる。
  */
-export function retention(card: CardState): number {
-  if (isNew(card)) return 0;
-  return retrievability(card.stability, MASTERED_HORIZON_DAYS);
+export const STREAK_WEIGHT = [4, 1.5, 0.6];
+
+/**
+ * 同時に抱える未クリアの語数の上限。
+ * 多すぎると1周が遠くて手応えが無く、少なすぎると同じ語ばかり出て飽きる。
+ */
+export const WORKING_SET = 12;
+
+/**
+ * 「まだ一度も正解していない語」をこの数まで同時に抱える。
+ *
+ * これが無いと、最初の十数問がすべて初見の語になって全滅する。
+ * 数語ずつ入れて、正解できるようになったぶんだけ次を入れる。
+ */
+export const NEW_INTAKE = 4;
+
+/** その語の連続正解数。 */
+export function streakOf(app: App, wordId: number): number {
+  return app.progress.get(wordId)?.streak ?? 0;
 }
 
-/** その語を「覚えた」とみなせるか。 */
-export function isMastered(card: CardState): boolean {
-  return retention(card) >= MASTERED_THRESHOLD;
+/** クリア済み（CLEAR_STREAK 回連続で正解した）か。 */
+export function isCleared(app: App, wordId: number): boolean {
+  return streakOf(app, wordId) >= CLEAR_STREAK;
 }
 
 export type StudyPhase =
@@ -112,6 +124,8 @@ export interface App {
   vocabulary: VocabularyFile;
   words: Map<number, Word>;
   cards: Map<number, CardState>;
+  /** 語ごとの連続正解数。クリア判定に使う。 */
+  progress: Map<number, WordProgress>;
   scheduler: Scheduler;
   meta: AppMeta;
   today: number;
@@ -187,10 +201,16 @@ export async function boot(baseUrl: string): Promise<App> {
     if (cards.has(c.wordId)) cards.set(c.wordId, c);
   }
 
+  const progress = new Map<number, WordProgress>();
+  for (const p of await loadProgress()) {
+    if (words.has(p.wordId)) progress.set(p.wordId, p);
+  }
+
   const app: App = {
     vocabulary,
     words,
     cards,
+    progress,
     scheduler: buildScheduler(vocabulary, meta),
     meta,
     today,

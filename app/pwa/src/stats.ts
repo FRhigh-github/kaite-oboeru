@@ -1,7 +1,7 @@
 // 統計画面。
 
 import { isNew } from "../../vocab-core/src/scheduler.ts";
-import { isMastered, retention, MASTERED_HORIZON_DAYS, type App } from "./app.ts";
+import { isCleared, streakOf, CLEAR_STREAK, type App } from "./app.ts";
 import { loadLogs } from "./storage.ts";
 import { escapeHtml } from "./study.ts";
 
@@ -10,26 +10,23 @@ const LEECH_THRESHOLD = 8;
 export async function renderStats(app: App, root: HTMLElement): Promise<void> {
   const cards = [...app.cards.values()];
   const studied = cards.filter((c) => !isNew(c));
-  const due = studied.filter((c) => c.dueDay <= app.today);
-  const leeches = studied.filter((c) => c.lapses >= LEECH_THRESHOLD);
+  const clearedCards = studied.filter((c) => isCleared(app, c.wordId));
+  const leeches = studied.filter(
+    (c) => (app.progress.get(c.wordId)?.misses ?? 0) >= LEECH_THRESHOLD,
+  );
 
-  // 定着度は「解答から1週間後の想起率」で見る。
-  // 今日時点の想起率で見ると、今日答えた語は正解も不正解も想起率 1.0 に
-  // なってしまい、間違えた語まで「しっかり」に入ってしまう。
+  // 進み具合は連続正解数そのままで見せる。何回続ければクリアかが分かる。
   const buckets = [
-    { label: "しっかり", min: 0.9, count: 0 },
-    { label: "だいたい", min: 0.7, count: 0 },
-    { label: "あやふや", min: 0.4, count: 0 },
-    { label: "忘れかけ", min: 0.0, count: 0 },
+    { label: "クリア", count: 0 },
+    // クリアに近い順（あと1回 → あと3回）
+    ...Array.from({ length: CLEAR_STREAK }, (_, i) => ({
+      label: `あと ${i + 1} 回`,
+      count: 0,
+    })),
   ];
   for (const c of studied) {
-    const r = retention(c);
-    for (const b of buckets) {
-      if (r >= b.min) {
-        b.count++;
-        break;
-      }
-    }
+    const s = Math.min(streakOf(app, c.wordId), CLEAR_STREAK);
+    buckets[s === CLEAR_STREAK ? 0 : CLEAR_STREAK - s].count++;
   }
 
   const logs = await loadLogs();
@@ -57,20 +54,19 @@ export async function renderStats(app: App, root: HTMLElement): Promise<void> {
         <div class="label">今日の正答率</div>
       </div>
       <div class="stat">
-        <div class="value">${studied.filter(isMastered).length}<span style="font-size:15px;color:var(--text-dim)"> / ${total}</span></div>
-        <div class="label">覚えた語</div>
+        <div class="value">${clearedCards.length}<span style="font-size:15px;color:var(--text-dim)"> / ${total}</span></div>
+        <div class="label">クリアした語</div>
       </div>
       <div class="stat">
-        <div class="value">${due.length}</div>
-        <div class="label">復習待ち</div>
+        <div class="value">${studied.length - clearedCards.length}</div>
+        <div class="label">学習中の語</div>
       </div>
     </div>
 
     <div class="card" style="margin-top:14px">
-      <h3 style="margin:0 0 4px;font-size:15px">定着度</h3>
+      <h3 style="margin:0 0 4px;font-size:15px">クリアまでの進み具合</h3>
       <p style="color:var(--text-dim);font-size:12px;margin:0 0 12px">
-        ${MASTERED_HORIZON_DAYS}日後にどれだけ思い出せそうかで分けています。
-        「しっかり」が覚えた語です。
+        ${CLEAR_STREAK}回連続で正解するとクリアです。まちがえると振り出しに戻ります。
       </p>
       ${
         studied.length === 0
@@ -96,7 +92,7 @@ export async function renderStats(app: App, root: HTMLElement): Promise<void> {
         leeches.length === 0
           ? `<p style="color:var(--text-dim);font-size:14px;margin:0">まだありません。${LEECH_THRESHOLD}回以上まちがえた語がここに出ます。</p>`
           : `<p style="color:var(--text-dim);font-size:13px;margin:0 0 8px">
-               ${LEECH_THRESHOLD}回以上まちがえた語です。出題頻度は抑えてあります。
+               ${LEECH_THRESHOLD}回以上まちがえた語です。
              </p>
              <div style="font-size:14px;line-height:1.9">
                ${leeches

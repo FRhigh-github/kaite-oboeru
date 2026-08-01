@@ -8,11 +8,21 @@
 // 引くと、学習タブを押し直しただけで問題が変わってしまうため。
 
 import { judge } from "../../vocab-core/src/normalizer.ts";
-import { gradeFrom, isNew, review } from "../../vocab-core/src/scheduler.ts";
-import { activeCards, isMastered, POS_LABEL, type App } from "./app.ts";
+import { gradeFrom, isNew, review, type CardState } from "../../vocab-core/src/scheduler.ts";
+import {
+  activeCards,
+  isCleared,
+  streakOf,
+  CLEAR_STREAK,
+  NEW_INTAKE,
+  POS_LABEL,
+  STREAK_WEIGHT,
+  WORKING_SET,
+  type App,
+} from "./app.ts";
 import { KanaKeyboard } from "./kana-keyboard.ts";
 import { speak } from "./speech.ts";
-import { appendLog, saveCard, saveMeta } from "./storage.ts";
+import { appendLog, saveCard, saveMeta, saveProgress } from "./storage.ts";
 
 /** これより速く正解したら「即答」とみなす。 */
 const QUICK_ANSWER_MS = 4000;
@@ -24,18 +34,17 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
   // --- パート表示バー ---------------------------------------------------
   // 学習画面から直接パートを選び直せるようにする。
   let total = 0;
-  let mastered = 0;
+  let cleared = 0;
   for (const w of app.vocabulary.words) {
     if (w.group !== currentPart) continue;
     total++;
-    const card = app.cards.get(w.id);
-    if (card && isMastered(card)) mastered++;
+    if (isCleared(app, w.id)) cleared++;
   }
   const partBar = `
     <button class="part-bar" data-part>
       <span class="part-main">
         <span class="part-name">パート ${currentPart}</span>
-        <span class="part-progress">${mastered} / ${total} 語 おぼえた</span>
+        <span class="part-progress">${cleared} / ${total} 語 クリア</span>
       </span>
       <span class="part-action">パートを<br>えらぶ<span class="part-chevron">›</span></span>
     </button>`;
@@ -48,16 +57,40 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
   };
 
   // --- 出題中の問題を用意する ---------------------------------------------
+  //
+  // 出題は連続正解数で決める。日付は見ない。
+  //   ・クリア済み（3回連続正解）の語は出さない
+  //   ・間違えた直後の語がいちばん出やすく、正解を重ねるほど出にくくなる
+  //   ・抱えている未クリアの語が減ったら新しい語を入れる
+  const clearedIds = new Set<number>();
+  let inProgress = 0;
+  let notYetCorrect = 0;
+  for (const id of pool.keys()) {
+    if (isCleared(app, id)) {
+      clearedIds.add(id);
+    } else if (!isNew(pool.get(id)!)) {
+      inProgress++;
+      if (streakOf(app, id) === 0) notYetCorrect++;
+    }
+  }
+
   if (app.current === null) {
-    const nextId = app.scheduler.nextWord(pool, app.today, app.meta.introducedToday);
+    const nextId = app.scheduler.nextWord(pool, app.today, app.meta.introducedToday, {
+      ignoreDue: true,
+      exclude: clearedIds,
+      weightOf: (state: CardState) =>
+        STREAK_WEIGHT[Math.min(streakOf(app, state.wordId), STREAK_WEIGHT.length - 1)],
+      // まだ一度も正解できていない語を抱えすぎているうちは新しい語を入れない
+      introduceNew: inProgress < WORKING_SET && notYetCorrect < NEW_INTAKE,
+    });
     if (nextId === null) {
       root.innerHTML = `
         ${partBar}
         <div class="empty">
-          <p>パート ${currentPart} の今日ぶんは終わりです。</p>
-          <p>また明日どうぞ。</p>
+          <p style="font-size:22px;color:var(--correct)">パート ${currentPart} 完了！</p>
+          <p>${total} 語すべてクリアしました。</p>
           <p style="font-size:14px;margin-top:24px">
-            先へ進むときは上の「パートをえらぶ」から<br>次のパートを選んでください。
+            上の「パートをえらぶ」から<br>次のパートに進めます。
           </p>
         </div>`;
       bindPartBar();
@@ -82,22 +115,24 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
   container.className = "study";
   root.replaceChildren(container);
 
-  function dueCount(): number {
-    let n = 0;
-    for (const c of pool.values()) {
-      if (!isNew(c) && c.dueDay <= app.today) n++;
-    }
-    return n;
-  }
+  /** クリアまであと何回連続正解が要るか。 */
+  const streak = streakOf(app, question.wordId);
+  const stepsLeft = Math.max(0, CLEAR_STREAK - streak);
 
+  /**
+   * 解答する。
+   *
+   * 空のまま押した場合は「わからん」。判定を待たずに不正解として扱う。
+   * 何か入れないと先へ進めないと、当てずっぽうを打つことになって
+   * 記録が濁るし、連続正解のカウントも意味が薄れる。
+   */
   function submit(value: string): void {
     const trimmed = value.trim();
-    if (!trimmed) return;
     keyboard?.destroy();
     keyboard = null;
     question.phase = {
       kind: "judged",
-      judgement: judge(trimmed, word.answers),
+      judgement: trimmed ? judge(trimmed, word.answers) : "wrong",
       input: trimmed,
       elapsedMs: performance.now() - question.shownAt,
     };
@@ -110,10 +145,14 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
         ${partBar}
         <div class="progress">
           <span>今日の解答 ${app.answeredThisSession}</span>
-          <span>復習待ち ${dueCount()}</span>
+          <span>のこり ${total - cleared} 語</span>
         </div>
         <div class="question">
-          ${firstTime ? '<span class="badge">はじめて</span>' : ""}
+          ${
+            firstTime
+              ? '<span class="badge">はじめて</span>'
+              : `<span class="badge streak-badge">${streakDots(streak)} あと ${stepsLeft} 回でクリア</span>`
+          }
           <div class="word-row">
             <span class="word">${escapeHtml(word.word)}</span>
             <button class="speak-btn" data-speak aria-label="発音を聞く">🔊</button>
@@ -123,7 +162,7 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
         <div class="answer-display" aria-live="polite" aria-label="入力中の解答">
           <span class="answer-text"></span><span class="caret"></span>
         </div>
-        <p class="hint">だいたい合っていれば正解です。</p>
+        <p class="hint">だいたい合っていれば正解です。わからなければ「わからん」。</p>
         <div class="keyboard-slot"></div>`;
 
       // OS の IME を通さないので、漢字・カタカナへの変換が起こりえない。
@@ -164,8 +203,11 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
               ? `<div class="answers">ほかの許容解: ${escapeHtml(others.join("、"))}</div>`
               : ""
           }
-          <div class="your-input">あなたの解答: ${escapeHtml(input)}</div>
+          <div class="your-input">
+            あなたの解答: ${input ? escapeHtml(input) : "わからん"}
+          </div>
         </div>
+        <div class="streak-line">${streakPreview(judgement, streak)}</div>
         ${
           judgement === "unsure"
             ? `<div class="self-report">
@@ -212,6 +254,18 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
     app.cards.set(question.wordId, updated);
     app.answeredThisSession++;
 
+    // 連続正解数の更新。まちがえたら 0 に戻す。
+    // FSRS のカード状態も引き続き更新している（出題間隔の材料として残す）が、
+    // クリア判定はこちらのカウンタだけを見る。
+    const before = app.progress.get(question.wordId);
+    const next = {
+      wordId: question.wordId,
+      streak: accepted ? (before?.streak ?? 0) + 1 : 0,
+      misses: (before?.misses ?? 0) + (accepted ? 0 : 1),
+    };
+    app.progress.set(question.wordId, next);
+    await saveProgress(next);
+
     if (firstTime) {
       app.meta = { ...app.meta, introducedToday: app.meta.introducedToday + 1 };
       await saveMeta(app.meta);
@@ -236,6 +290,28 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
   }
 
   draw();
+}
+
+/** 連続正解数を ●●○ で表す。 */
+function streakDots(streak: number): string {
+  const done = Math.min(streak, CLEAR_STREAK);
+  return "●".repeat(done) + "○".repeat(CLEAR_STREAK - done);
+}
+
+/**
+ * 判定後に、クリアまであと何回かを見せる。
+ * 「惜しい」はこのあとの自己申告で結果が決まるので何も出さない。
+ */
+function streakPreview(judgement: string, streak: number): string {
+  if (judgement === "unsure") return "";
+  if (judgement !== "correct") {
+    return streak > 0
+      ? `${streakDots(0)} 連続がとぎれました。あと ${CLEAR_STREAK} 回`
+      : `${streakDots(0)} あと ${CLEAR_STREAK} 回でクリア`;
+  }
+  const next = streak + 1;
+  if (next >= CLEAR_STREAK) return `${streakDots(CLEAR_STREAK)} クリア！`;
+  return `${streakDots(next)} あと ${CLEAR_STREAK - next} 回でクリア`;
 }
 
 /**

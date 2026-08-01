@@ -299,6 +299,27 @@ button.secondary {
   color: var(--text-dim);
 }
 
+/* クリアまでの進み具合 */
+.streak-badge {
+  letter-spacing: 0.12em;
+}
+
+.streak-line {
+  flex-shrink: 0;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+}
+
+.streak-line:empty {
+  display: none;
+}
+
+.result.correct + .streak-line {
+  color: var(--correct);
+}
+
 .self-report {
   display: flex;
   gap: 10px;
@@ -369,6 +390,8 @@ h2 {
 }
 
 .bar-row .bar-fill {
+  /* span のままだと inline で height が効かず、バーが出ない */
+  display: block;
   height: 100%;
   background: var(--accent);
   border-radius: 999px;
@@ -495,6 +518,14 @@ h2 {
   color: #fff;
   font-weight: 600;
   font-size: 16px;
+}
+
+/* 何も入力していないときの送信キー。
+   押すとそのまま不正解になるので、「こたえる」と同じ色にしない。 */
+.kk-submit.kk-giveup {
+  background: var(--surface-2);
+  color: var(--text-dim);
+  border: 2px dashed var(--text-dim);
 }
 
 /* 「こたえる」を右列の縦長ボタンにする（3行ぶん） */

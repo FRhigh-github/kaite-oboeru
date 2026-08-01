@@ -15,6 +15,14 @@ type KeyDef =
   /** 機能キー */
   | { kind: "fn"; label: string; fn: "back" | "cycle" | "submit"; tall?: boolean };
 
+/** 入力があるときの送信キー。 */
+const SUBMIT_LABEL = "こたえる";
+/**
+ * 何も入力していないときの送信キー。
+ * 押すとそのまま不正解になるので、色を変えて取り違えを防ぐ。
+ */
+const GIVE_UP_LABEL = "わからん";
+
 /**
  * 配置（左上から行方向）。
  *
@@ -32,7 +40,8 @@ const LAYOUT: KeyDef[] = [
   { kind: "flick", label: "た", flick: ["た", "ち", "つ", "て", "と"] },
   { kind: "flick", label: "な", flick: ["な", "に", "ぬ", "ね", "の"] },
   { kind: "flick", label: "は", flick: ["は", "ひ", "ふ", "へ", "ほ"] },
-  { kind: "fn", label: "こたえる", fn: "submit", tall: true },
+  // 何も入力していないときは「わからん」に変わる（updateSubmitKey）
+  { kind: "fn", label: SUBMIT_LABEL, fn: "submit", tall: true },
 
   { kind: "flick", label: "ま", flick: ["ま", "み", "む", "め", "も"] },
   { kind: "flick", label: "や", flick: ["や", "", "ゆ", "", "よ"] },
@@ -93,6 +102,7 @@ export class KanaKeyboard {
   private text = "";
   private readonly options: KanaKeyboardOptions;
   private root: HTMLElement | null = null;
+  private submitKey: HTMLElement | null = null;
 
   constructor(options: KanaKeyboardOptions = {}) {
     this.options = options;
@@ -104,13 +114,13 @@ export class KanaKeyboard {
 
   clear(): void {
     this.text = "";
-    this.options.onChange?.(this.text);
+    this.changed();
   }
 
   /** 再描画をまたいで入力途中の文字列を復元する。 */
   setValue(value: string): void {
     this.text = value;
-    this.options.onChange?.(this.text);
+    this.changed();
   }
 
   /** キーボードを描画して container に差し込む。 */
@@ -120,6 +130,9 @@ export class KanaKeyboard {
     root.innerHTML = `<div class="kk-grid">${LAYOUT.map(renderKey).join("")}</div>`;
     container.appendChild(root);
     this.root = root;
+    this.submitKey = root.querySelector<HTMLElement>(".kk-submit");
+    // 初期状態（空）では「わからん」で出す
+    this.updateSubmitKey();
 
     LAYOUT.forEach((def, i) => {
       const key = root.querySelector<HTMLElement>(`[data-i="${i}"]`);
@@ -201,7 +214,7 @@ export class KanaKeyboard {
     switch (fn) {
       case "back":
         this.text = [...this.text].slice(0, -1).join("");
-        this.options.onChange?.(this.text);
+        this.changed();
         break;
       case "cycle": {
         const chars = [...this.text];
@@ -210,7 +223,7 @@ export class KanaKeyboard {
         if (next) {
           chars[chars.length - 1] = next;
           this.text = chars.join("");
-          this.options.onChange?.(this.text);
+          this.changed();
         }
         break;
       }
@@ -220,16 +233,35 @@ export class KanaKeyboard {
     }
   }
 
+  /** 入力が変わったときの共通処理。 */
+  private changed(): void {
+    this.updateSubmitKey();
+    this.options.onChange?.(this.text);
+  }
+
+  /**
+   * 送信キーの表示を切り替える。
+   * 空のときは押すと不正解になるので、ラベルも色も変えて別物に見せる。
+   */
+  private updateSubmitKey(): void {
+    const key = this.submitKey;
+    if (!key) return;
+    const empty = this.text.length === 0;
+    key.textContent = empty ? GIVE_UP_LABEL : SUBMIT_LABEL;
+    key.classList.toggle("kk-giveup", empty);
+  }
+
   private append(char: string): void {
     if (!char) return;
     if ([...this.text].length >= MAX_LENGTH) return;
     this.text += char;
-    this.options.onChange?.(this.text);
+    this.changed();
   }
 
   destroy(): void {
     this.root?.remove();
     this.root = null;
+    this.submitKey = null;
   }
 }
 

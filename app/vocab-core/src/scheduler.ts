@@ -233,6 +233,27 @@ export interface SchedulerWord {
 const WEIGHT_SCALE = 1_000_000;
 
 /**
+ * nextWord の挙動を差し替えるオプション。
+ *
+ * **すべて省略時は Python 参照実装とまったく同じ挙動になる。**
+ * 差分テスト（verify.ts）はオプションなしで呼ぶので、
+ * ここに追加するものは必ず「省略時は従来どおり」であること。
+ *
+ * アプリ側は「3回連続正解でクリア」という別の進み方を採るため、
+ * 復習日ではなく連続正解数で出題を決めたい。その差し替え口。
+ */
+export interface NextWordOptions {
+  /** 復習日を無視し、未クリアの語すべてを候補にする */
+  ignoreDue?: boolean;
+  /** 出題対象から外す語（クリア済みなど） */
+  exclude?: ReadonlySet<number>;
+  /** 出題の重み。省略時は FSRS の想起率から決める */
+  weightOf?: (state: CardState, day: number) => number;
+  /** 新規語を投入するか。省略時は復習待ち数と1日の上限から判断する */
+  introduceNew?: boolean;
+}
+
+/**
  * 出題順を決める。
  *
  * 設計の要点は「スコア順に並べて上から出さない」こと。
@@ -316,15 +337,20 @@ export class Scheduler {
    * 候補は必ず wordId 順に並べる。抽選は候補の並び順に依存するため、
    * オブジェクトのキー順に任せると Python 版と結果がずれてしまう。
    */
-  private candidates(states: ReadonlyMap<number, CardState>, day: number): number[] {
+  private candidates(
+    states: ReadonlyMap<number, CardState>,
+    day: number,
+    options: NextWordOptions = {},
+  ): number[] {
+    const usable = (s: CardState) => !isNew(s) && !options.exclude?.has(s.wordId);
     let due = [...states.values()]
-      .filter((s) => !isNew(s) && s.dueDay <= day)
+      .filter((s) => usable(s) && (options.ignoreDue || s.dueDay <= day))
       .map((s) => s.wordId)
       .sort((a, b) => a - b);
     if (due.length === 0) {
       // 期限前でも、最も忘れかけているものから出す
       due = [...states.values()]
-        .filter((s) => !isNew(s))
+        .filter(usable)
         .map((s) => s.wordId)
         .sort((a, b) => a - b);
     }
@@ -352,9 +378,13 @@ export class Scheduler {
    * キューはアプリ側で永続化されないので、再起動後は学習済みの語も
    * 先頭に残っている。それらは読み飛ばす。
    */
-  private popNew(states: ReadonlyMap<number, CardState>): number | null {
+  private popNew(
+    states: ReadonlyMap<number, CardState>,
+    exclude?: ReadonlySet<number>,
+  ): number | null {
     while (this.newQueue.length > 0) {
       const wordId = this.newQueue.shift()!;
+      if (exclude?.has(wordId)) continue;
       const state = states.get(wordId);
       if (state !== undefined && !isNew(state)) continue;
       return wordId;
@@ -367,6 +397,7 @@ export class Scheduler {
     states: ReadonlyMap<number, CardState>,
     day: number,
     introducedToday: number,
+    options: NextWordOptions = {},
   ): number | null {
     let dueCount = 0;
     for (const s of states.values()) {
@@ -374,18 +405,21 @@ export class Scheduler {
     }
 
     // 復習待ちが少なければ新規語を投入する
-    if (dueCount < this.config.dueTarget && introducedToday < this.config.newPerDay) {
-      const wordId = this.popNew(states);
+    const wantsNew =
+      options.introduceNew ??
+      (dueCount < this.config.dueTarget && introducedToday < this.config.newPerDay);
+    if (wantsNew) {
+      const wordId = this.popNew(states, options.exclude);
       if (wordId !== null) {
         this.remember(wordId);
         return wordId;
       }
     }
 
-    const pool = this.candidates(states, day);
+    const pool = this.candidates(states, day, options);
     if (pool.length === 0) {
-      if (introducedToday < this.config.newPerDay) {
-        const wordId = this.popNew(states);
+      if (options.introduceNew ?? introducedToday < this.config.newPerDay) {
+        const wordId = this.popNew(states, options.exclude);
         if (wordId !== null) {
           this.remember(wordId);
           return wordId;
@@ -394,7 +428,8 @@ export class Scheduler {
       return null;
     }
 
-    const weights = this.quantized(pool.map((id) => this.weight(states.get(id)!, day)));
+    const weightOf = options.weightOf ?? ((s: CardState, d: number) => this.weight(s, d));
+    const weights = this.quantized(pool.map((id) => weightOf(states.get(id)!, day)));
     const total = weights.reduce((a, b) => a + b, 0);
     const r = this.rng.below(total);
     let acc = 0;

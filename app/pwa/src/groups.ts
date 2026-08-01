@@ -4,7 +4,7 @@
 // グループ1がいちばん易しく、番号が上がるほど難しくなる。
 
 import { isNew } from "../../vocab-core/src/scheduler.ts";
-import { buildScheduler, isMastered, type App } from "./app.ts";
+import { buildScheduler, isCleared, CLEAR_STREAK, type App } from "./app.ts";
 import { saveMeta } from "./storage.ts";
 
 /**
@@ -41,8 +41,7 @@ interface GroupSummary {
   tier: string;
   total: number;
   studied: number;
-  mastered: number;
-  due: number;
+  cleared: number;
 }
 
 function summarize(app: App): GroupSummary[] {
@@ -50,17 +49,14 @@ function summarize(app: App): GroupSummary[] {
   for (const w of app.vocabulary.words) {
     let s = map.get(w.group);
     if (!s) {
-      s = { group: w.group, tier: w.tier, total: 0, studied: 0, mastered: 0, due: 0 };
+      s = { group: w.group, tier: w.tier, total: 0, studied: 0, cleared: 0 };
       map.set(w.group, s);
     }
     s.total++;
+    if (isCleared(app, w.id)) s.cleared++;
     const card = app.cards.get(w.id);
     if (!card || isNew(card)) continue;
     s.studied++;
-    if (card.dueDay <= app.today) s.due++;
-    // 「覚えた」は今日の想起率では測らない（app.ts の isMastered を参照）。
-    // 今日の想起率で測ると、間違えた語まで覚えたことになってしまう。
-    if (isMastered(card)) s.mastered++;
   }
   return [...map.values()].sort((a, b) => a.group - b.group);
 }
@@ -71,8 +67,8 @@ function levelHeader(tier: string, summaries: readonly GroupSummary[]): string {
   if (!level) return "";
   const inLevel = summaries.filter((s) => s.tier === tier);
   const total = inLevel.reduce((n, s) => n + s.total, 0);
-  const mastered = inLevel.reduce((n, s) => n + s.mastered, 0);
-  const pct = total > 0 ? Math.round((mastered / total) * 100) : 0;
+  const cleared = inLevel.reduce((n, s) => n + s.cleared, 0);
+  const pct = total > 0 ? Math.round((cleared / total) * 100) : 0;
   const first = inLevel[0]?.group;
   const last = inLevel[inLevel.length - 1]?.group;
 
@@ -86,7 +82,7 @@ function levelHeader(tier: string, summaries: readonly GroupSummary[]): string {
       <div class="level-note">${level.note}</div>
       <div class="level-bar">
         <span class="bar-track"><span class="bar-fill" style="width:${pct}%"></span></span>
-        <span class="level-count">${mastered} / ${total} 語</span>
+        <span class="level-count">${cleared} / ${total} 語</span>
       </div>
     </div>`;
 }
@@ -102,20 +98,26 @@ export function renderGroups(app: App, root: HTMLElement, rerender: () => void):
       const header = s.tier === seenTier ? "" : levelHeader(s.tier, summaries);
       seenTier = s.tier;
       const on = current.has(s.group);
-      const pct = s.total > 0 ? Math.round((s.mastered / s.total) * 100) : 0;
+      const pct = s.total > 0 ? Math.round((s.cleared / s.total) * 100) : 0;
+      const done = s.cleared === s.total;
       return `
         ${header}
         <button class="group-item${on ? " selected" : ""}" data-group="${s.group}">
           <span class="group-head">
-            <span class="group-name">パート ${s.group}${on ? " ・ 学習中" : ""}</span>
-            <span class="group-count">${s.mastered} / ${s.total} 語</span>
+            <span class="group-name">パート ${s.group}${
+              done ? " ・ 完了" : on ? " ・ 学習中" : ""
+            }</span>
+            <span class="group-count">${s.cleared} / ${s.total} 語</span>
           </span>
           <span class="bar-track">
             <span class="bar-fill" style="width:${pct}%"></span>
           </span>
           <span class="group-meta">
-            ${s.studied === 0 ? "未着手" : `学習済み ${s.studied}`}
-            ${s.due > 0 ? ` ・ 復習待ち ${s.due}` : ""}
+            ${
+              s.studied === 0
+                ? "未着手"
+                : `学習中 ${Math.max(0, s.studied - s.cleared)} ・ クリア ${s.cleared}`
+            }
           </span>
         </button>`;
     })
@@ -125,7 +127,7 @@ export function renderGroups(app: App, root: HTMLElement, rerender: () => void):
     <h2>パートを選ぶ</h2>
     <p style="color:var(--text-dim);font-size:14px;margin:0 0 16px">
       選んだパートの学習が始まります。番号が小さいほど易しい語です。
-      「◯ / 100 語」は、1週間後でも思い出せる見込みの語数です。
+      「◯ / 100 語」は ${CLEAR_STREAK} 回連続で正解してクリアした語の数です。
     </p>
 
     <div class="group-list">${items}</div>
