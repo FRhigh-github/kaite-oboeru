@@ -7,7 +7,9 @@
 import type { Judgement } from "../../vocab-core/src/normalizer.ts";
 import {
   Scheduler,
+  isNew,
   newCard,
+  retrievability,
   type CardState,
   type SchedulerWord,
 } from "../../vocab-core/src/scheduler.ts";
@@ -56,6 +58,34 @@ export const POS_LABEL: Record<string, string> = {
   expression: "表現",
   affix: "接辞",
 };
+
+/**
+ * 「覚えた」とみなす基準（日数）。
+ *
+ * 今日時点の想起率で判定してはいけない。解答した直後は経過日数が0なので
+ * 想起率は必ず 1.0 になり、**間違えた語まで「覚えた」に数えられてしまう**。
+ * そこで「最後に解答した日から MASTERED_HORIZON_DAYS 日たっても
+ * 思い出せる見込みか」で判定する。間違えると安定度が下がるので、
+ * 間違えた語は自動的に基準から外れる。
+ */
+export const MASTERED_HORIZON_DAYS = 7;
+
+/** この想起率以上を「覚えた」とみなす。 */
+export const MASTERED_THRESHOLD = 0.9;
+
+/**
+ * 定着度スコア。MASTERED_HORIZON_DAYS 日後にまだ思い出せる確率。
+ * 解答した日に左右されないので、日をまたいでも表示がぶれない。
+ */
+export function retention(card: CardState): number {
+  if (isNew(card)) return 0;
+  return retrievability(card.stability, MASTERED_HORIZON_DAYS);
+}
+
+/** その語を「覚えた」とみなせるか。 */
+export function isMastered(card: CardState): boolean {
+  return retention(card) >= MASTERED_THRESHOLD;
+}
 
 export type StudyPhase =
   | { kind: "asking" }
@@ -122,15 +152,21 @@ export async function boot(baseUrl: string): Promise<App> {
       // 最初はパート1だけ。学習画面から切り替えられる。
       selectedGroups: [1],
       speechEnabled: true,
+      speechVolume: 1,
     };
     await saveMeta(meta);
   }
   // 旧バージョンのバックアップを読み込んだ場合の補完
-  if (!Array.isArray(meta.selectedGroups) || typeof meta.speechEnabled !== "boolean") {
+  if (
+    !Array.isArray(meta.selectedGroups) ||
+    typeof meta.speechEnabled !== "boolean" ||
+    typeof meta.speechVolume !== "number"
+  ) {
     meta = {
       ...meta,
       selectedGroups: Array.isArray(meta.selectedGroups) ? meta.selectedGroups : [1],
       speechEnabled: typeof meta.speechEnabled === "boolean" ? meta.speechEnabled : true,
+      speechVolume: typeof meta.speechVolume === "number" ? meta.speechVolume : 1,
     };
     await saveMeta(meta);
   }
@@ -181,11 +217,19 @@ export function buildScheduler(
       ? vocabulary.words.filter((w) => selected.has(w.group))
       : vocabulary.words;
 
-  const schedulerWords: SchedulerWord[] = target.map((w) => ({
+  // 新規語を投入する順は SchedulerWord.difficulty で決まる。
+  // vocabulary.json の difficulty は 1..5 の5段階しかなく、100語のパートでは
+  // 全語が同じ値になるため、パート内の並びが完全にシャッフルされてしまう。
+  // （易しい語と難しい語が入り混じって出てくる原因はこれ。）
+  // データは易しい順に並んでいるので、その並び順を細かい段階として渡し直す。
+  // ORDER_BUCKET 語ごとに1段階なので、易しい順を保ちつつ
+  // 「毎回まったく同じ順序にはならない」揺らぎも残る。
+  const ORDER_BUCKET = 10;
+  const schedulerWords: SchedulerWord[] = target.map((w, i) => ({
     wordId: w.id,
     word: w.word,
     reading: w.reading,
-    difficulty: w.difficulty,
+    difficulty: Math.floor(i / ORDER_BUCKET),
   }));
   return new Scheduler(schedulerWords, meta.seed);
 }

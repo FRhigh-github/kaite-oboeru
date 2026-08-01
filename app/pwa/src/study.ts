@@ -8,16 +8,14 @@
 // 引くと、学習タブを押し直しただけで問題が変わってしまうため。
 
 import { judge } from "../../vocab-core/src/normalizer.ts";
-import { gradeFrom, isNew, retrievabilityOn, review } from "../../vocab-core/src/scheduler.ts";
-import { activeCards, POS_LABEL, type App } from "./app.ts";
+import { gradeFrom, isNew, review } from "../../vocab-core/src/scheduler.ts";
+import { activeCards, isMastered, POS_LABEL, type App } from "./app.ts";
 import { KanaKeyboard } from "./kana-keyboard.ts";
 import { speak } from "./speech.ts";
 import { appendLog, saveCard, saveMeta } from "./storage.ts";
 
 /** これより速く正解したら「即答」とみなす。 */
 const QUICK_ANSWER_MS = 4000;
-/** この想起率以上を「覚えた」とみなす（パートの進捗表示用）。 */
-const MASTERED_THRESHOLD = 0.9;
 
 export function renderStudy(app: App, root: HTMLElement, rerender: () => void): void {
   const currentPart = app.meta.selectedGroups[0] ?? 1;
@@ -31,9 +29,7 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
     if (w.group !== currentPart) continue;
     total++;
     const card = app.cards.get(w.id);
-    if (card && !isNew(card) && retrievabilityOn(card, app.today) >= MASTERED_THRESHOLD) {
-      mastered++;
-    }
+    if (card && isMastered(card)) mastered++;
   }
   const partBar = `
     <button class="part-bar" data-part>
@@ -132,10 +128,15 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
 
       // OS の IME を通さないので、漢字・カタカナへの変換が起こりえない。
       const display = container.querySelector<HTMLElement>(".answer-text")!;
+      const box = container.querySelector<HTMLElement>(".answer-display")!;
       keyboard = new KanaKeyboard({
         onChange: (v) => {
           question.draft = v;
           display.textContent = v;
+          // 文字数が増えても枠の高さを変えない。
+          // 折り返して縦に伸びると、その下のキーボードがずれて
+          // 打っている最中に指の位置が変わってしまう。
+          box.style.fontSize = `${answerFontSize(v)}px`;
         },
         onSubmit: submit,
       });
@@ -187,14 +188,14 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
 
     container.querySelector<HTMLButtonElement>("[data-speak]")?.addEventListener(
       "click",
-      () => speak(word.word),
+      () => speak(word.word, app.meta.speechVolume),
     );
     bindPartBar();
 
     // 出題時に一度だけ自動で読み上げる
     if (question.phase.kind === "asking" && !question.spoken && app.meta.speechEnabled) {
       question.spoken = true;
-      speak(word.word);
+      speak(word.word, app.meta.speechVolume);
     }
   }
 
@@ -235,6 +236,20 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
   }
 
   draw();
+}
+
+/**
+ * 入力欄の文字サイズ。1行に収まるよう文字数に応じて縮める。
+ * 折り返させないことで枠の高さが変わらず、下のキーボードが動かない。
+ */
+function answerFontSize(value: string): number {
+  const n = [...value].length;
+  const FULL = 26;      // これ以下の文字数なら等倍
+  const FITS = 9;
+  // MAX_LENGTH(24文字) まで打っても横にはみ出さない大きさ
+  const MIN = 12;
+  if (n <= FITS) return FULL;
+  return Math.max(MIN, Math.round((FULL * FITS) / n));
 }
 
 /** 単語データは信頼できるが、ユーザー入力を混ぜて描画するので必ず通す。 */

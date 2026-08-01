@@ -5,6 +5,7 @@
 // メニューから開ける独立した画面での表示を求めている。削除しないこと。
 
 import type { App } from "./app.ts";
+import { speak } from "./speech.ts";
 import { clearAll, exportBackup, importBackup, saveMeta, type Backup } from "./storage.ts";
 import { escapeHtml } from "./study.ts";
 
@@ -42,6 +43,22 @@ export async function renderSettings(
         <input type="checkbox" data-role="speech"
                ${app.meta.speechEnabled ? "checked" : ""} />
       </label>
+
+      <div class="slider-row">
+        <div class="slider-head">
+          <span>音量</span>
+          <span data-role="volume-value">${Math.round(app.meta.speechVolume * 100)}%</span>
+        </div>
+        <div class="slider-line">
+          <input type="range" min="0" max="100" step="5" data-role="volume"
+                 value="${Math.round(app.meta.speechVolume * 100)}" />
+          <button class="icon-btn" data-action="test-speech"
+                  aria-label="音量を試す">🔊</button>
+        </div>
+        <p style="color:var(--text-dim);font-size:12px;margin:6px 0 0">
+          0% にすると読み上げません。端末の音量より大きくはできません。
+        </p>
+      </div>
     </div>
 
     <div class="card">
@@ -74,6 +91,24 @@ export async function renderSettings(
       const on = (e.target as HTMLInputElement).checked;
       app.meta = { ...app.meta, speechEnabled: on };
       await saveMeta(app.meta);
+    });
+
+  // 音量。つまみを動かしている間は表示だけ更新し、離したときに保存する。
+  const volume = root.querySelector<HTMLInputElement>('[data-role="volume"]')!;
+  const volumeValue = root.querySelector<HTMLElement>('[data-role="volume-value"]')!;
+  volume.addEventListener("input", () => {
+    volumeValue.textContent = `${volume.value}%`;
+  });
+  volume.addEventListener("change", async () => {
+    app.meta = { ...app.meta, speechVolume: Number(volume.value) / 100 };
+    await saveMeta(app.meta);
+    // その場で聞いて決められるようにする
+    speak("volume", app.meta.speechVolume);
+  });
+
+  root.querySelector<HTMLButtonElement>('[data-action="test-speech"]')!
+    .addEventListener("click", () => {
+      speak("example", Number(volume.value) / 100);
     });
 
   root.querySelector<HTMLButtonElement>('[data-action="export"]')!

@@ -36,9 +36,16 @@ export function initSpeech(): void {
   });
 }
 
-/** 英単語を読み上げる。失敗しても学習は続けられるので例外は投げない。 */
-export function speak(text: string): void {
+/**
+ * 英単語を読み上げる。失敗しても学習は続けられるので例外は投げない。
+ *
+ * volume は 0..1。0 なら発話そのものを行わない
+ * （0 を渡しても鳴ってしまう実装があるため）。
+ */
+export function speak(text: string, volume = 1): void {
   if (!speechSupported() || !text) return;
+  const vol = Math.min(Math.max(volume, 0), 1);
+  if (vol === 0) return;
   try {
     // 前の読み上げが残っていると重なるので止める
     speechSynthesis.cancel();
@@ -47,6 +54,7 @@ export function speak(text: string): void {
     cachedVoice ??= pickVoice();
     if (cachedVoice) utterance.voice = cachedVoice;
     utterance.rate = 0.9;
+    utterance.volume = vol;
     speechSynthesis.speak(utterance);
   } catch {
     // 端末が対応していない場合は黙って何もしない

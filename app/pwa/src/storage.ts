@@ -47,6 +47,8 @@ export interface AppMeta {
   selectedGroups: number[];
   /** 問題が出たときに自動で読み上げるか */
   speechEnabled: boolean;
+  /** 読み上げの音量 (0..1)。端末の音量とは別に下げられるようにする。 */
+  speechVolume: number;
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null;

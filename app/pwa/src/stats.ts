@@ -1,7 +1,7 @@
 // 統計画面。
 
-import { isNew, retrievabilityOn } from "../../vocab-core/src/scheduler.ts";
-import type { App } from "./app.ts";
+import { isNew } from "../../vocab-core/src/scheduler.ts";
+import { isMastered, retention, MASTERED_HORIZON_DAYS, type App } from "./app.ts";
 import { loadLogs } from "./storage.ts";
 import { escapeHtml } from "./study.ts";
 
@@ -13,7 +13,9 @@ export async function renderStats(app: App, root: HTMLElement): Promise<void> {
   const due = studied.filter((c) => c.dueDay <= app.today);
   const leeches = studied.filter((c) => c.lapses >= LEECH_THRESHOLD);
 
-  // 定着度は「今日時点の想起率」で見る。安定度そのものより体感に近い。
+  // 定着度は「解答から1週間後の想起率」で見る。
+  // 今日時点の想起率で見ると、今日答えた語は正解も不正解も想起率 1.0 に
+  // なってしまい、間違えた語まで「しっかり」に入ってしまう。
   const buckets = [
     { label: "しっかり", min: 0.9, count: 0 },
     { label: "だいたい", min: 0.7, count: 0 },
@@ -21,7 +23,7 @@ export async function renderStats(app: App, root: HTMLElement): Promise<void> {
     { label: "忘れかけ", min: 0.0, count: 0 },
   ];
   for (const c of studied) {
-    const r = retrievabilityOn(c, app.today);
+    const r = retention(c);
     for (const b of buckets) {
       if (r >= b.min) {
         b.count++;
@@ -55,8 +57,8 @@ export async function renderStats(app: App, root: HTMLElement): Promise<void> {
         <div class="label">今日の正答率</div>
       </div>
       <div class="stat">
-        <div class="value">${studied.length}<span style="font-size:15px;color:var(--text-dim)"> / ${total}</span></div>
-        <div class="label">学習した語</div>
+        <div class="value">${studied.filter(isMastered).length}<span style="font-size:15px;color:var(--text-dim)"> / ${total}</span></div>
+        <div class="label">覚えた語</div>
       </div>
       <div class="stat">
         <div class="value">${due.length}</div>
@@ -65,7 +67,11 @@ export async function renderStats(app: App, root: HTMLElement): Promise<void> {
     </div>
 
     <div class="card" style="margin-top:14px">
-      <h3 style="margin:0 0 12px;font-size:15px">定着度</h3>
+      <h3 style="margin:0 0 4px;font-size:15px">定着度</h3>
+      <p style="color:var(--text-dim);font-size:12px;margin:0 0 12px">
+        ${MASTERED_HORIZON_DAYS}日後にどれだけ思い出せそうかで分けています。
+        「しっかり」が覚えた語です。
+      </p>
       ${
         studied.length === 0
           ? '<p style="color:var(--text-dim);font-size:14px;margin:0">まだ学習記録がありません。</p>'

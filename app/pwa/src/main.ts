@@ -59,6 +59,11 @@ function render(): void {
   }
   view.scrollTop = 0;
 
+  // 出題画面だけは1画面に収める。指の位置を変えずに答え続けられるよう、
+  // スクロールで問題やキーボードが動かないようにする。
+  const fixedHeight = currentView === "study" && !app.partPickerOpen;
+  view.classList.toggle("fixed", fixedHeight);
+
   switch (currentView) {
     case "study":
       if (app.partPickerOpen) renderGroups(app, view, render);
