@@ -251,6 +251,14 @@ export interface NextWordOptions {
   weightOf?: (state: CardState, day: number) => number;
   /** 新規語を投入するか。省略時は復習待ち数と1日の上限から判断する */
   introduceNew?: boolean;
+  /**
+   * 出題の順番。小さい語ほど先に出す。
+   *
+   * 抽選より優先され、この値が最小の語だけが抽選に残る。
+   * アプリ側で「まちがえた語は20問後、あたった語は40問後」という
+   * 決まった間隔を守るために使う。省略時は全候補が抽選に残る。
+   */
+  preferOrder?: (state: CardState) => number;
 }
 
 /**
@@ -416,7 +424,15 @@ export class Scheduler {
       }
     }
 
-    const pool = this.candidates(states, day, options);
+    let pool = this.candidates(states, day, options);
+    if (pool.length > 0 && options.preferOrder) {
+      // 「出す順番」が指定されているときは、いちばん順番の早い語だけを残す。
+      // 同着が複数あればそのなかで抽選する。
+      const order = options.preferOrder;
+      const keys = pool.map((id) => order(states.get(id)!));
+      const min = Math.min(...keys);
+      pool = pool.filter((_, i) => keys[i] === min);
+    }
     if (pool.length === 0) {
       if (options.introduceNew ?? introducedToday < this.config.newPerDay) {
         const wordId = this.popNew(states, options.exclude);

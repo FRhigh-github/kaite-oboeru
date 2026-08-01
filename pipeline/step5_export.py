@@ -71,6 +71,7 @@ def main() -> int:
             "meaning": r["meaning"],    # 表示用（漢字 or かな）
             "reading": r["reading"],    # 代表の読み（ひらがな）
             "answers": r["answers"],    # 判定用の許容読み（ひらがな）
+            "near": r.get("near", []),  # 準正解（△にする読み）
             "pos": r["pos"],
             "difficulty": r["difficulty"],
             "tier": entry["tier"],
@@ -120,17 +121,17 @@ def main() -> int:
             })
 
     rng = random.Random(20260801)  # 再現性のため固定
-    probes: list[tuple[str, list[str]]] = []
+    probes: list[tuple[str, list[str], list[str]]] = []
 
     # 1) 自分の許容解 → correct になるはず
     for x in words:
         for ans in x["answers"][:3]:
-            probes.append((ans, x["answers"]))
+            probes.append((ans, x["answers"], x["near"]))
 
     # 2) 他の語の読みとの交差 → 多くは wrong、同音語なら correct
     for x in rng.sample(words, min(1000, len(words))):
         other = rng.choice(words)
-        probes.append((other["reading"], x["answers"]))
+        probes.append((other["reading"], x["answers"], x["near"]))
 
     # 3) 1文字落とし・置換のタイプミス → 編集距離の境界を突く
     for x in rng.sample(words, min(1000, len(words))):
@@ -138,22 +139,28 @@ def main() -> int:
         if len(r) < 3:
             continue
         i = rng.randrange(len(r))
-        probes.append((r[:i] + r[i + 1:], x["answers"]))
-        probes.append((r[:i] + "ん" + r[i + 1:], x["answers"]))
+        probes.append((r[:i] + r[i + 1:], x["answers"], x["near"]))
+        probes.append((r[:i] + "ん" + r[i + 1:], x["answers"], x["near"]))
 
     # 4) 前方一致・後方一致 → unsure の境界を突く
     for x in rng.sample(words, min(500, len(words))):
         r = x["reading"]
         if len(r) >= 3:
-            probes.append((r[:len(r) // 2], x["answers"]))
+            probes.append((r[:len(r) // 2], x["answers"], x["near"]))
 
-    # 5) 空・記号のみなどの異常系
+    # 5) 準正解の読み → unsure になるはず（段5の境界を突く）
+    for x in words:
+        for n in x["near"][:2]:
+            probes.append((n, x["answers"], x["near"]))
+
+    # 6) 空・記号のみなどの異常系
     for weird in ["", " ", "　", "、", "()", "ー", "・・・"]:
-        probes.append((weird, words[0]["answers"]))
+        probes.append((weird, words[0]["answers"], words[0]["near"]))
 
     judge_vectors = [
-        {"input": inp, "answers": ans, "expected": judge(inp, ans)}
-        for inp, ans in probes
+        {"input": inp, "answers": ans, "near": near,
+         "expected": judge(inp, ans, near)}
+        for inp, ans, near in probes
     ]
 
     out_vectors = OUT / "normalization_testcases.json"

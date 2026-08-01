@@ -45,6 +45,7 @@ interface NormalizeCase {
 interface JudgeCase {
   input: string;
   answers: string[];
+  near: string[];
   expected: string;
 }
 
@@ -83,7 +84,7 @@ let judgeMismatch = 0;
 const byOutcome: Record<string, number> = {};
 for (const c of normVectors.judge) {
   byOutcome[c.expected] = (byOutcome[c.expected] ?? 0) + 1;
-  const actual = judge(c.input, c.answers);
+  const actual = judge(c.input, c.answers, c.near);
   if (actual !== c.expected) {
     if (shown++ < 10) {
       console.log(`  [FAIL] judge(${c.input}, [${c.answers}])`);

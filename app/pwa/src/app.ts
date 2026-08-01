@@ -29,6 +29,8 @@ export interface Word {
   meaning: string;
   reading: string;
   answers: string[];
+  /** 準正解。意味は近いが代表訳ではない読み。当たると「惜しい」になる。 */
+  near?: string[];
   pos: string;
   difficulty: number;
   tier: string;
@@ -72,24 +74,39 @@ export const CLEAR_STREAK = 3;
 
 /**
  * 出題の重み（連続正解数ごと）。
- * 間違えた直後（0回）がいちばん出やすく、正解を重ねるほど出にくくなる。
+ * 同じくらい「そろそろ出す頃」の語が並んだときの選び分けに使う。
  */
 export const STREAK_WEIGHT = [4, 1.5, 0.6];
 
 /**
- * 一度出た語を、次に出すまで空ける問題数。
+ * まちがえた語を、次に出すまで空ける問題数。
  *
- * 直前に出たばかりの語が続けて出ると、覚えていなくても答えられてしまう。
+ * 短すぎると直前の記憶で答えられてしまい、長すぎると忘れきってしまう。
  */
-export const COOLDOWN = 25;
+export const GAP_WRONG = 20;
+
+/**
+ * あたった語を、次に出すまで空ける問題数。
+ *
+ * まちがえた語より倍の間隔を置き、思い出す手間がかかる状態で再会させる。
+ */
+export const GAP_CORRECT = 40;
+
+/**
+ * 一度出た語を、次に出すまで最低限空ける問題数。
+ *
+ * ふだんの間隔は GAP_WRONG / GAP_CORRECT で決まる。これはその予定を守れない
+ * （抱えている語が足りない）ときに、それでも守る下限。
+ */
+export const COOLDOWN = 10;
 
 /**
  * 同時に抱える未クリアの語数の上限。
  *
- * COOLDOWN より十分多く持つ必要がある。抱えている語が COOLDOWN 以下だと
- * 出せる語が無くなり、間隔を空ける決まりのほうが破られてしまう。
+ * GAP_CORRECT より多く持つ必要がある。抱えている語がそれ以下だと
+ * 40問空ける前に一周してしまい、間隔の決まりのほうが破られてしまう。
  */
-export const WORKING_SET = COOLDOWN + 8;
+export const WORKING_SET = GAP_CORRECT + 4;
 
 /**
  * 学習を始めたとき、最初に続けて出す初見の語の数。
@@ -103,6 +120,11 @@ export const FIRST_BATCH = 8;
 /** その語の連続正解数。 */
 export function streakOf(app: App, wordId: number): number {
   return app.progress.get(wordId)?.streak ?? 0;
+}
+
+/** その語を次に出してよくなる時点（askedCount の値）。未解答なら 0。 */
+export function dueAtOf(app: App, wordId: number): number {
+  return app.progress.get(wordId)?.dueAt ?? 0;
 }
 
 /** クリア済み（CLEAR_STREAK 回連続で正解した）か。 */
@@ -183,6 +205,7 @@ export async function boot(baseUrl: string): Promise<App> {
       speechEnabled: true,
       speechVolume: 1,
       lastBackupDay: -1,
+      askedCount: 0,
     };
     await saveMeta(meta);
   }
@@ -191,7 +214,8 @@ export async function boot(baseUrl: string): Promise<App> {
     !Array.isArray(meta.selectedGroups) ||
     typeof meta.speechEnabled !== "boolean" ||
     typeof meta.speechVolume !== "number" ||
-    typeof meta.lastBackupDay !== "number"
+    typeof meta.lastBackupDay !== "number" ||
+    typeof meta.askedCount !== "number"
   ) {
     meta = {
       ...meta,
@@ -199,6 +223,7 @@ export async function boot(baseUrl: string): Promise<App> {
       speechEnabled: typeof meta.speechEnabled === "boolean" ? meta.speechEnabled : true,
       speechVolume: typeof meta.speechVolume === "number" ? meta.speechVolume : 1,
       lastBackupDay: typeof meta.lastBackupDay === "number" ? meta.lastBackupDay : -1,
+      askedCount: typeof meta.askedCount === "number" ? meta.askedCount : 0,
     };
     await saveMeta(meta);
   }

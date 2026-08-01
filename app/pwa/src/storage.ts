@@ -52,6 +52,12 @@ export interface AppMeta {
   speechVolume: number;
   /** 最後にバックアップを書き出した日 (dayZero からの日数)。-1 = 未実施。 */
   lastBackupDay: number;
+  /**
+   * これまでに解答した総問題数。
+   * 「まちがえた語は20問後、あたった語は40問後」という間隔を数えるための時計。
+   * 日付ではなく問題数で数えるので、途中でアプリを閉じても間隔は保たれる。
+   */
+  askedCount: number;
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -180,6 +186,12 @@ export interface WordProgress {
   streak: number;
   /** まちがえた回数の累計（苦手な語の表示に使う） */
   misses: number;
+  /**
+   * 次に出してよくなる時点（AppMeta.askedCount の値）。
+   * 直前の解答が正解なら +GAP_CORRECT、不正解なら +GAP_WRONG 先を指す。
+   * 未設定（古いデータ）の語は 0 とみなし、すぐ出題対象になる。
+   */
+  dueAt?: number;
 }
 
 export async function loadProgress(): Promise<WordProgress[]> {

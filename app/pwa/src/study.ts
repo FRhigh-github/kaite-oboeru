@@ -14,8 +14,10 @@ import {
   isCleared,
   streakOf,
   CLEAR_STREAK,
-  COOLDOWN,
+  dueAtOf,
   FIRST_BATCH,
+  GAP_CORRECT,
+  GAP_WRONG,
   POS_LABEL,
   STREAK_WEIGHT,
   WORKING_SET,
@@ -82,10 +84,10 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
 
   // --- 出題中の問題を用意する ---------------------------------------------
   //
-  // 出題は連続正解数で決める。日付は見ない。
+  // 出題は「解いた問題数」で決める。日付は見ない。
   //   ・クリア済み（3回連続正解）の語は出さない
-  //   ・間違えた直後の語がいちばん出やすく、正解を重ねるほど出にくくなる
-  //   ・一度出た語は COOLDOWN 問ぶん空けてから出す
+  //   ・まちがえた語は GAP_WRONG 問後、あたった語は GAP_CORRECT 問後に戻す
+  //   ・そのなかで最も待たせている語から順に出す（同着なら抽選）
   const clearedIds = new Set<number>();
   let inProgress = 0;
   for (const id of pool.keys()) {
@@ -95,17 +97,15 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
 
   // 新しい語を入れるか。
   //
-  // 出題間隔を空けるには回す語が COOLDOWN より多く要るので、
-  // そこに届くまでは速く、届いたあとはゆっくり入れる。
+  // 40問の間隔を空けるには回す語が WORKING_SET ぶん要るので、
+  // そこに届くまでは入れつづける。
   // ただし最初の FIRST_BATCH 語を過ぎたら初見が続かないようにする
   // （初見ばかりが並ぶと全滅して手応えが無い）。
   const introduceNew =
     inProgress < WORKING_SET &&
     (inProgress < FIRST_BATCH
       ? true
-      : inProgress <= COOLDOWN
-        ? app.questionsSinceNew >= 1
-        : app.questionsSinceNew >= 2);
+      : app.questionsSinceNew >= 1);
 
   if (app.current === null) {
     const nextId = app.scheduler.nextWord(pool, app.today, app.meta.introducedToday, {
@@ -113,6 +113,9 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
       exclude: clearedIds,
       weightOf: (state: CardState) =>
         STREAK_WEIGHT[Math.min(streakOf(app, state.wordId), STREAK_WEIGHT.length - 1)],
+      // 予定の早い語から出す。予定より遅れている語が複数あっても、
+      // いちばん長く待たせている語が先。
+      preferOrder: (state: CardState) => dueAtOf(app, state.wordId),
       introduceNew,
     });
     if (nextId === null) {
@@ -163,7 +166,7 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
     keyboard = null;
     question.phase = {
       kind: "judged",
-      judgement: trimmed ? judge(trimmed, word.answers) : "wrong",
+      judgement: trimmed ? judge(trimmed, word.answers, word.near) : "wrong",
       input: trimmed,
       elapsedMs: performance.now() - question.shownAt,
     };
@@ -275,6 +278,15 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
     app.cards.set(question.wordId, updated);
     app.answeredThisSession++;
 
+    // 出題間隔は「解いた問題数」で数える。この1問ぶんを進めてから予定を書く。
+    const asked = app.meta.askedCount + 1;
+    app.meta = {
+      ...app.meta,
+      askedCount: asked,
+      introducedToday: app.meta.introducedToday + (firstTime ? 1 : 0),
+    };
+    await saveMeta(app.meta);
+
     // 連続正解数の更新。まちがえたら 0 に戻す。
     // FSRS のカード状態も引き続き更新している（出題間隔の材料として残す）が、
     // クリア判定はこちらのカウンタだけを見る。
@@ -283,14 +295,11 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
       wordId: question.wordId,
       streak: accepted ? (before?.streak ?? 0) + 1 : 0,
       misses: (before?.misses ?? 0) + (accepted ? 0 : 1),
+      // まちがえた語は早く、あたった語は遅く戻す
+      dueAt: asked + (accepted ? GAP_CORRECT : GAP_WRONG),
     };
     app.progress.set(question.wordId, next);
     await saveProgress(next);
-
-    if (firstTime) {
-      app.meta = { ...app.meta, introducedToday: app.meta.introducedToday + 1 };
-      await saveMeta(app.meta);
-    }
 
     await saveCard(updated);
     // 判定とユーザーの最終判断が食い違ったケースが、訳語改善の材料になる。

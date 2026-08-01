@@ -129,10 +129,16 @@ def distance_threshold(s: str) -> int:
     return 2
 
 
-def judge(user_input: str, answers: list[str]) -> str:
+def judge(user_input: str, answers: list[str],
+          near: list[str] | None = None) -> str:
     """3値判定を返す: 'correct' / 'unsure' / 'wrong'.
 
     answers は許容される読み（ひらがな）のリスト。先頭が代表の読み。
+
+    near は「意味は近いが代表訳ではない」読みのリスト（準正解）。
+    JMdict の下位候補で、その語の訳として挙がってはいるが、
+    ○ にするには確度が足りないもの。当たれば 'unsure' を返す。
+    字面がまったく違う同義語（規則／ルール）はここでしか拾えない。
 
     'unsure' はアプリ側でユーザーに自己申告させる（「合ってた？」ボタン）。
     ここで集めた自己申告データが、後から AI 判定を導入する際の評価データになる。
@@ -166,5 +172,19 @@ def judge(user_input: str, answers: list[str]) -> str:
         for a in answer_keys:
             if u in a or a in u:
                 return "unsure"
+
+    # 段5: 準正解。answers と字面が違っても、その語の訳語候補ではあるもの。
+    # ここは ○ にせず必ず △ に留める（下位候補なので確度が足りない）。
+    near_keys: set[str] = set()
+    for n in near or []:
+        near_keys |= variants(n)
+    near_keys -= answer_keys
+    if near_keys:
+        if user_keys & near_keys:
+            return "unsure"
+        for u in user_keys:
+            for a in near_keys:
+                if edit_distance(u, a) <= distance_threshold(a):
+                    return "unsure"
 
     return "wrong"

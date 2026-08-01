@@ -99,8 +99,19 @@ export function variants(text: string): Set<string> {
 
 // --- 判定 ---
 
-/** 3値判定。answers は許容される読み（ひらがな）のリスト。 */
-export function judge(userInput: string, answers: readonly string[]): Judgement {
+/**
+ * 3値判定。answers は許容される読み（ひらがな）のリスト。
+ *
+ * near は「意味は近いが代表訳ではない」読み（準正解）。
+ * JMdict の下位候補で、その語の訳として挙がってはいるが ○ にするには
+ * 確度が足りないもの。当たれば `unsure` を返す。
+ * 字面がまったく違う同義語（規則／ルール）はここでしか拾えない。
+ */
+export function judge(
+  userInput: string,
+  answers: readonly string[],
+  near: readonly string[] = [],
+): Judgement {
   const userKeys = variants(userInput);
   if (userKeys.size === 0) return "wrong";
 
@@ -135,6 +146,28 @@ export function judge(userInput: string, answers: readonly string[]): Judgement 
     if (chars.length < 2 && !singleKanji) continue;
     for (const answer of answerKeys) {
       if (answer.includes(user) || user.includes(answer)) return "unsure";
+    }
+  }
+
+  // 段5: 準正解。answers と字面が違っても、その語の訳語候補ではあるもの。
+  // ここは correct にせず必ず unsure に留める（下位候補なので確度が足りない）。
+  const nearKeys = new Set<string>();
+  for (const n of near) {
+    for (const key of variants(n)) nearKeys.add(key);
+  }
+  for (const key of answerKeys) nearKeys.delete(key);
+  if (nearKeys.size > 0) {
+    for (const user of userKeys) {
+      if (nearKeys.has(user)) return "unsure";
+    }
+    for (const user of userKeys) {
+      const userChars = Array.from(user);
+      for (const n of nearKeys) {
+        const nearChars = Array.from(n);
+        if (editDistance(userChars, nearChars) <= distanceThreshold(nearChars.length)) {
+          return "unsure";
+        }
+      }
     }
   }
 

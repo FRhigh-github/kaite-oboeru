@@ -20,6 +20,7 @@ from config import (
     DROP_ANY_FIELD,
     DROP_MISC,
     MAX_ACCEPTED,
+    MAX_NEAR,
     MAX_READING_LEN,
     MIN_READING_LEN,
     OVERRIDES_PATH,
@@ -139,10 +140,28 @@ def main() -> int:
             if len(answers) >= MAX_ACCEPTED:
                 break
 
+        # 準正解（△）。許容解に入りきらなかった候補と、タグで落とした候補。
+        # 「意味は近いが代表訳ではない」ものを拾うのが目的なので、
+        # ○ の選別より基準を緩める。○ には決してしないので過剰でも害は小さい。
+        near = []
+        loose = sorted(
+            (c for c in cands
+             if keep(c, allow_field=True, allow_demoted=True, allow_exp=True)),
+            key=lambda c: rank_key(c, word))
+        for c in loose:
+            key = normalize(c["reading"])
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            near.append(c["reading"])
+            if len(near) >= MAX_NEAR:
+                break
+
         refined[word] = {
             "meaning": best["display"],      # 表示用（漢字 or かな）
             "reading": best["reading"],      # 代表の読み
             "answers": answers,              # 判定用（ひらがな）
+            "near": near,                    # 準正解（△にする読み）
             "pos": classify_pos(best["pos"]),
             "difficulty": difficulty_of[word],
         }
@@ -159,6 +178,7 @@ def main() -> int:
                 "meaning": ov.get("meaning") or base.get("meaning") or ov["answers"][0],
                 "reading": ov.get("reading") or ov["answers"][0],
                 "answers": ov["answers"],
+                "near": ov.get("near") or base.get("near", []),
                 "pos": ov.get("pos") or base.get("pos", "noun"),
                 "difficulty": ov.get("difficulty") or difficulty_of.get(word, 3),
             }
