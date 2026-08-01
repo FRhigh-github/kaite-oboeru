@@ -35,9 +35,6 @@ export async function renderStats(app: App, root: HTMLElement): Promise<void> {
   const accuracy =
     todayLogs.length > 0 ? Math.round((accepted / todayLogs.length) * 100) : null;
 
-  // ローカル判定と自己申告が食い違った件数。訳語データの改善余地を示す。
-  const disagreements = logs.filter((l) => l.judgement !== "correct" && l.accepted);
-
   const total = app.vocabulary.words.length;
   const maxBucket = Math.max(1, ...buckets.map((b) => b.count));
 
@@ -64,13 +61,10 @@ export async function renderStats(app: App, root: HTMLElement): Promise<void> {
     </div>
 
     <div class="card" style="margin-top:14px">
-      <h3 style="margin:0 0 4px;font-size:15px">クリアまでの進み具合</h3>
-      <p style="color:var(--text-dim);font-size:12px;margin:0 0 12px">
-        ${CLEAR_STREAK}回連続で正解するとクリアです。まちがえると振り出しに戻ります。
-      </p>
+      <h3>クリアまで（${CLEAR_STREAK}回連続で正解）</h3>
       ${
         studied.length === 0
-          ? '<p style="color:var(--text-dim);font-size:14px;margin:0">まだ学習記録がありません。</p>'
+          ? '<p class="note">まだ記録がありません</p>'
           : buckets
               .map(
                 (b) => `
@@ -87,37 +81,20 @@ export async function renderStats(app: App, root: HTMLElement): Promise<void> {
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 8px;font-size:15px">苦手な語</h3>
+      <h3>苦手な語（${LEECH_THRESHOLD}回以上まちがえた）</h3>
       ${
         leeches.length === 0
-          ? `<p style="color:var(--text-dim);font-size:14px;margin:0">まだありません。${LEECH_THRESHOLD}回以上まちがえた語がここに出ます。</p>`
-          : `<p style="color:var(--text-dim);font-size:13px;margin:0 0 8px">
-               ${LEECH_THRESHOLD}回以上まちがえた語です。
-             </p>
-             <div style="font-size:14px;line-height:1.9">
+          ? '<p class="note">まだありません</p>'
+          : `<div class="leech-list">
                ${leeches
                  .slice(0, 30)
                  .map((c) => {
                    const w = app.words.get(c.wordId)!;
-                   return `${escapeHtml(w.word)} <span style="color:var(--text-dim)">${escapeHtml(w.meaning)}</span>`;
+                   return `<div><b>${escapeHtml(w.word)}</b> ${escapeHtml(w.meaning)}</div>`;
                  })
-                 .join("<br>")}
+                 .join("")}
              </div>`
       }
     </div>
-
-    ${
-      disagreements.length > 0
-        ? `<div class="card">
-             <h3 style="margin:0 0 8px;font-size:15px">判定のずれ</h3>
-             <p style="color:var(--text-dim);font-size:13px;margin:0">
-               自動判定が「不正解／惜しい」としたが、あなたが正解と判断した回数:
-               <strong style="color:var(--text)">${disagreements.length}</strong> 件。<br>
-               この記録は訳語データを改善するための材料になります。
-               設定画面からエクスポートできます。
-             </p>
-           </div>`
-        : ""
-    }
   `;
 }

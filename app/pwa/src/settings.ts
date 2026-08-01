@@ -19,27 +19,19 @@ export async function renderSettings(
     <h2>設定</h2>
 
     <div class="card">
-      <h3 style="margin:0 0 10px;font-size:15px">学習データのバックアップ</h3>
-      <p class="warning">
-        iPhone のホーム画面アプリは、長く使わないと保存データが
-        端末側で消えることがあります。ときどき書き出して保管してください。
-      </p>
+      <h3>バックアップ</h3>
+      <p class="warning">長く使わないと端末側で消えることがあります</p>
       <div class="settings-actions" style="margin-top:14px">
-        <button class="primary" data-action="export">バックアップを書き出す</button>
-        <button class="secondary" data-action="import">バックアップを読み込む</button>
+        <button class="primary" data-action="export">書き出す</button>
+        <button class="secondary" data-action="import">読み込む</button>
       </div>
       <input type="file" accept="application/json,.json" hidden data-role="file" />
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 10px;font-size:15px">発音</h3>
+      <h3>発音</h3>
       <label class="toggle-row">
-        <span>
-          問題が出たら自動で読み上げる
-          <span style="display:block;color:var(--text-dim);font-size:12px">
-            オフでも 🔊 ボタンでいつでも聞けます
-          </span>
-        </span>
+        <span>自動で読み上げる</span>
         <input type="checkbox" data-role="speech"
                ${app.meta.speechEnabled ? "checked" : ""} />
       </label>
@@ -55,31 +47,26 @@ export async function renderSettings(
           <button class="icon-btn" data-action="test-speech"
                   aria-label="音量を試す">🔊</button>
         </div>
-        <p style="color:var(--text-dim);font-size:12px;margin:6px 0 0">
-          0% にすると読み上げません。端末の音量より大きくはできません。
-        </p>
       </div>
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 10px;font-size:15px">このアプリについて</h3>
-      <p style="font-size:14px;color:var(--text-dim);margin:0">
-        収録語数: ${app.vocabulary.words.length} 語<br>
-        学習開始日: ${escapeHtml(app.meta.dayZero)}（${app.today} 日目）
+      <h3>このアプリ</h3>
+      <p class="note">
+        ${app.vocabulary.words.length} 語 ・ ${escapeHtml(app.meta.dayZero)} から ${app.today} 日目
       </p>
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 10px;font-size:15px">出典・ライセンス</h3>
+      <h3>出典・ライセンス</h3>
       <div class="attribution" data-role="attribution">読み込み中…</div>
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 10px;font-size:15px">データの消去</h3>
-      <p class="warning">学習記録がすべて消えます。取り消せません。</p>
+      <h3>データの消去</h3>
+      <p class="warning">取り消せません</p>
       <div class="settings-actions" style="margin-top:14px">
-        <button class="secondary" data-action="clear"
-          style="color:var(--wrong)">学習データを消去する</button>
+        <button class="secondary danger" data-action="clear">消去する</button>
       </div>
     </div>
   `;

@@ -4,7 +4,7 @@
 // グループ1がいちばん易しく、番号が上がるほど難しくなる。
 
 import { isNew } from "../../vocab-core/src/scheduler.ts";
-import { buildScheduler, isCleared, CLEAR_STREAK, type App } from "./app.ts";
+import { buildScheduler, isCleared, type App } from "./app.ts";
 import { saveMeta } from "./storage.ts";
 
 /**
@@ -15,25 +15,10 @@ import { saveMeta } from "./storage.ts";
  * わけではない。あくまで「どこまで覚えたか」の見当をつけるための目安として、
  * 断定を避けた表現にしてある。
  */
-const LEVELS: { tier: string; name: string; goal: string; note: string }[] = [
-  {
-    tier: "part1",
-    name: "基礎",
-    goal: "高校基礎 ・ 英検準2級 ・ TOEIC 500点",
-    note: "教科書と共通テストの土台になる語です。",
-  },
-  {
-    tier: "part2",
-    name: "標準",
-    goal: "高校卒業 ・ 英検2級 ・ TOEIC 600〜700点",
-    note: "ここまで覚えると共通テストの長文で困る語がかなり減ります。",
-  },
-  {
-    tier: "part3",
-    name: "上級",
-    goal: "難関大二次 ・ 英検準1級 ・ TOEIC 800点",
-    note: "難関大の長文や学術的な文章に出る語です。",
-  },
+const LEVELS: { tier: string; name: string; goal: string }[] = [
+  { tier: "part1", name: "基礎", goal: "TOEIC 500点" },
+  { tier: "part2", name: "標準", goal: "TOEIC 700点" },
+  { tier: "part3", name: "上級", goal: "TOEIC 800点" },
 ];
 
 interface GroupSummary {
@@ -76,13 +61,12 @@ function levelHeader(tier: string, summaries: readonly GroupSummary[]): string {
     <div class="level-head">
       <div class="level-title">
         <span class="level-name">${level.name}</span>
-        <span class="level-range">パート ${first}〜${last}</span>
+        <span class="level-range">${first}〜${last}</span>
+        <span class="level-goal">目安 ${level.goal}</span>
       </div>
-      <div class="level-goal">ここまで覚えたら目安: ${level.goal}</div>
-      <div class="level-note">${level.note}</div>
       <div class="level-bar">
         <span class="bar-track"><span class="bar-fill" style="width:${pct}%"></span></span>
-        <span class="level-count">${cleared} / ${total} 語</span>
+        <span class="level-count">${cleared}/${total}</span>
       </div>
     </div>`;
 }
@@ -102,22 +86,15 @@ export function renderGroups(app: App, root: HTMLElement, rerender: () => void):
       const done = s.cleared === s.total;
       return `
         ${header}
-        <button class="group-item${on ? " selected" : ""}" data-group="${s.group}">
+        <button class="group-item${on ? " selected" : ""}${done ? " done" : ""}"
+                data-group="${s.group}">
+          <span class="group-num">${String(s.group).padStart(2, "0")}</span>
           <span class="group-head">
-            <span class="group-name">パート ${s.group}${
-              done ? " ・ 完了" : on ? " ・ 学習中" : ""
-            }</span>
-            <span class="group-count">${s.cleared} / ${s.total} 語</span>
+            <span class="group-name">パート ${s.group}</span>
+            <span class="group-count">${s.cleared}/${s.total}</span>
           </span>
           <span class="bar-track">
             <span class="bar-fill" style="width:${pct}%"></span>
-          </span>
-          <span class="group-meta">
-            ${
-              s.studied === 0
-                ? "未着手"
-                : `学習中 ${Math.max(0, s.studied - s.cleared)} ・ クリア ${s.cleared}`
-            }
           </span>
         </button>`;
     })
@@ -125,13 +102,7 @@ export function renderGroups(app: App, root: HTMLElement, rerender: () => void):
 
   root.innerHTML = `
     <h2>パートを選ぶ</h2>
-    <p style="color:var(--text-dim);font-size:14px;margin:0 0 16px">
-      選んだパートの学習が始まります。番号が小さいほど易しい語です。
-      「◯ / 100 語」は ${CLEAR_STREAK} 回連続で正解してクリアした語の数です。
-    </p>
-
     <div class="group-list">${items}</div>
-
     <div class="settings-actions" style="margin-top:18px">
       <button class="secondary" data-action="cancel">やめる</button>
     </div>

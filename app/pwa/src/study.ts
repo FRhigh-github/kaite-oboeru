@@ -87,11 +87,8 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
       root.innerHTML = `
         ${partBar}
         <div class="empty">
-          <p style="font-size:22px;color:var(--correct)">パート ${currentPart} 完了！</p>
-          <p>${total} 語すべてクリアしました。</p>
-          <p style="font-size:14px;margin-top:24px">
-            上の「パートをえらぶ」から<br>次のパートに進めます。
-          </p>
+          <p class="empty-big">パート ${currentPart} 完了！</p>
+          <p>${total} 語すべてクリア</p>
         </div>`;
       bindPartBar();
       return;
@@ -144,14 +141,14 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
       container.innerHTML = `
         ${partBar}
         <div class="progress">
-          <span>今日の解答 ${app.answeredThisSession}</span>
-          <span>のこり ${total - cleared} 語</span>
+          <span>${app.answeredThisSession} 問</span>
+          <span>のこり ${total - cleared}</span>
         </div>
         <div class="question">
           ${
             firstTime
               ? '<span class="badge">はじめて</span>'
-              : `<span class="badge streak-badge">${streakDots(streak)} あと ${stepsLeft} 回でクリア</span>`
+              : `<span class="badge streak-badge">${streakDots(streak)}</span>`
           }
           <div class="word-row">
             <span class="word">${escapeHtml(word.word)}</span>
@@ -162,7 +159,6 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
         <div class="answer-display" aria-live="polite" aria-label="入力中の解答">
           <span class="answer-text"></span><span class="caret"></span>
         </div>
-        <p class="hint">だいたい合っていれば正解です。わからなければ「わからん」。</p>
         <div class="keyboard-slot"></div>`;
 
       // OS の IME を通さないので、漢字・カタカナへの変換が起こりえない。
@@ -186,7 +182,8 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
       const { judgement, input } = question.phase;
       const verdict =
         judgement === "correct" ? "正解" : judgement === "unsure" ? "惜しい" : "不正解";
-      const others = word.answers.filter((a) => a !== word.reading);
+      // 許容解は全部並べると場所を食うだけなので、いくつかに絞る
+      const others = word.answers.filter((a) => a !== word.reading).slice(0, 3);
 
       container.innerHTML = `
         ${partBar}
@@ -200,12 +197,10 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
           <div class="reading">${escapeHtml(word.reading)}</div>
           ${
             others.length > 0
-              ? `<div class="answers">ほかの許容解: ${escapeHtml(others.join("、"))}</div>`
+              ? `<div class="answers">${escapeHtml(others.join(" / "))}</div>`
               : ""
           }
-          <div class="your-input">
-            あなたの解答: ${input ? escapeHtml(input) : "わからん"}
-          </div>
+          <div class="your-input">${input ? escapeHtml(input) : "わからん"}</div>
         </div>
         <div class="streak-line">${streakPreview(judgement, streak)}</div>
         ${
@@ -304,14 +299,10 @@ function streakDots(streak: number): string {
  */
 function streakPreview(judgement: string, streak: number): string {
   if (judgement === "unsure") return "";
-  if (judgement !== "correct") {
-    return streak > 0
-      ? `${streakDots(0)} 連続がとぎれました。あと ${CLEAR_STREAK} 回`
-      : `${streakDots(0)} あと ${CLEAR_STREAK} 回でクリア`;
-  }
+  if (judgement !== "correct") return streakDots(0);
   const next = streak + 1;
   if (next >= CLEAR_STREAK) return `${streakDots(CLEAR_STREAK)} クリア！`;
-  return `${streakDots(next)} あと ${CLEAR_STREAK - next} 回でクリア`;
+  return streakDots(next);
 }
 
 /**
