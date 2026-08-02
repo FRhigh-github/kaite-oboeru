@@ -20,6 +20,7 @@ import {
   POS_LABEL,
   STREAK_WEIGHT,
   WORKING_SET,
+  wrongStreakOf,
   type App,
 } from "./app.ts";
 import { backupDue, saveBackup } from "./backup.ts";
@@ -147,6 +148,8 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
 
   /** この語の連続正解数。 */
   const streak = streakOf(app, question.wordId);
+  /** この語で連続してまちがえている回数。 */
+  const wrongStreak = wrongStreakOf(app, question.wordId);
 
   /**
    * 解答する。
@@ -165,7 +168,45 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
       input: trimmed,
       elapsedMs: performance.now() - question.shownAt,
     };
+    // 不正解がはっきりしていて書き取りをする設定なら、「つぎへ」を挟まない。
+    // 押しても同じ画面のまま書き取りに変わるだけで、1タップ増えるだけになる。
+    if (question.phase.judgement === "wrong" && app.meta.retypeOnWrong) {
+      void finish(false);
+      return;
+    }
     draw();
+  }
+
+  /**
+   * 入力欄とキーボードを組み立てる。出題と書き取りで同じものを使う。
+   *
+   * @param initial   復元する入力途中の文字列
+   * @param onChange  1文字打つたびに呼ばれる
+   * @param onSubmit  「こたえる」を押したとき
+   */
+  function mountKeyboard(
+    initial: string,
+    onChange: (v: string) => void,
+    onSubmit: (v: string) => void,
+  ): void {
+    // OS の IME を通さないので、漢字・カタカナへの変換が起こりえない。
+    const display = container.querySelector<HTMLElement>(".answer-text")!;
+    const box = container.querySelector<HTMLElement>(".answer-display")!;
+    keyboard = new KanaKeyboard({
+      onChange: (v) => {
+        display.textContent = v;
+        // 文字数が増えても枠の高さを変えない。
+        // 折り返して縦に伸びると、その下のキーボードがずれて
+        // 打っている最中に指の位置が変わってしまう。
+        box.style.fontSize = `${answerFontSize(v)}px`;
+        onChange(v);
+      },
+      onSubmit,
+      toggleInput: app.meta.toggleInput,
+    });
+    keyboard.mount(container.querySelector<HTMLElement>(".keyboard-slot")!);
+    // 入力途中でタブを移動しても消えないよう復元する
+    if (initial) keyboard.setValue(initial);
   }
 
   function draw(): void {
@@ -173,7 +214,7 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
       container.innerHTML = `
         ${partBar}${notice}
         <div class="question">
-          ${firstTime ? '<span class="badge">はじめて</span>' : streakMarks(streak)}
+          ${firstTime ? '<span class="badge">はじめて</span>' : streakMarks(streak, false, wrongStreak)}
           <div class="word-row">
             <span class="word">${escapeHtml(word.word)}</span>
             <button class="speak-btn" data-speak aria-label="発音を聞く">🔊</button>
@@ -185,26 +226,13 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
         </div>
         <div class="keyboard-slot"></div>`;
 
-      // OS の IME を通さないので、漢字・カタカナへの変換が起こりえない。
-      const display = container.querySelector<HTMLElement>(".answer-text")!;
-      const box = container.querySelector<HTMLElement>(".answer-display")!;
-      keyboard = new KanaKeyboard({
-        onChange: (v) => {
-          question.draft = v;
-          display.textContent = v;
-          // 文字数が増えても枠の高さを変えない。
-          // 折り返して縦に伸びると、その下のキーボードがずれて
-          // 打っている最中に指の位置が変わってしまう。
-          box.style.fontSize = `${answerFontSize(v)}px`;
-        },
-        onSubmit: submit,
-        toggleInput: app.meta.toggleInput,
-      });
-      keyboard.mount(container.querySelector<HTMLElement>(".keyboard-slot")!);
-      // 入力途中でタブを移動しても消えないよう復元する
-      if (question.draft) keyboard.setValue(question.draft);
+      mountKeyboard(question.draft, (v) => (question.draft = v), submit);
     } else {
-      const { judgement, input } = question.phase;
+      // 判定結果。書き取り中も同じ画面のまま、下だけキーボードに差し替える。
+      // 別画面に送ると解説が消えてしまい、何を写しているのか分からなくなる。
+      const phase = question.phase;
+      const retyping = phase.kind === "retype";
+      const { judgement, input } = phase;
       const verdict =
         judgement === "correct" ? "正解" : judgement === "unsure" ? "惜しい" : "不正解";
       // 許容解は全部並べると場所を食うだけなので、いくつかに絞る
@@ -212,7 +240,7 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
 
       container.innerHTML = `
         ${partBar}${notice}
-        <div class="result ${judgement}">
+        <div class="result ${judgement}${retyping ? " retyping" : ""}">
           <div class="verdict">${verdict}</div>
           <div class="word-row">
             <span class="result-word">${escapeHtml(word.word)}</span>
@@ -226,18 +254,51 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
               : ""
           }
           <div class="your-input">${input ? escapeHtml(input) : "わからん"}</div>
+          ${
+            retyping
+              ? `<div class="retype-hint${phase.missed ? " missed" : ""}">${
+                  phase.missed
+                    ? "ちがいます。上の読みをもう一度"
+                    : "上の読みを打つと次へ進みます"
+                }</div>`
+              : ""
+          }
         </div>
-        <div class="streak-line">${streakPreview(judgement, streak)}</div>
+        <div class="streak-line">${streakPreview(judgement, streak, wrongStreak)}</div>
         ${
-          judgement === "unsure"
-            ? `<div class="self-report">
-                 <button class="secondary" data-self="no">ちがった</button>
-                 <button class="primary" data-self="yes">合ってた</button>
-               </div>`
-            : `<button class="primary" data-next="1">つぎへ</button>`
+          retyping
+            ? `<div class="answer-display${phase.missed ? " shake" : ""}"
+                    aria-live="polite" aria-label="入力中の解答">
+                 <span class="answer-text"></span><span class="caret"></span>
+               </div>
+               <div class="keyboard-slot"></div>`
+            : judgement === "unsure"
+              ? `<div class="self-report">
+                   <button class="secondary" data-self="no">ちがった</button>
+                   <button class="primary" data-self="yes">合ってた</button>
+                 </div>`
+              : `<button class="primary" data-next="1">つぎへ</button>`
         }`;
 
-      if (judgement === "unsure") {
+      if (retyping) {
+        // 正しく打てるまで次へ進まない。まちがえた形のまま終わらせない。
+        const done = (v: string): boolean => judge(v.trim(), [word.reading], []) === "correct";
+        mountKeyboard(
+          phase.typed,
+          (v) => {
+            phase.typed = v;
+            // 打ち終えた瞬間に進む。「こたえる」を押させると一手増える。
+            if (done(v)) advance();
+          },
+          (v) => {
+            if (done(v)) advance();
+            else {
+              question.phase = { ...phase, typed: v, missed: true };
+              draw();
+            }
+          },
+        );
+      } else if (judgement === "unsure") {
         for (const btn of container.querySelectorAll<HTMLButtonElement>("[data-self]")) {
           btn.addEventListener("click", () => void finish(btn.dataset.self === "yes"));
         }
@@ -259,6 +320,14 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
       question.spoken = true;
       speak(word.word, app.meta.speechVolume);
     }
+  }
+
+  /** 次の語へ進む。 */
+  function advance(): void {
+    keyboard?.destroy();
+    keyboard = null;
+    app.current = null;
+    rerender();
   }
 
   async function finish(accepted: boolean): Promise<void> {
@@ -291,6 +360,7 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
       wordId: question.wordId,
       streak: accepted ? (before?.streak ?? 0) + 1 : 0,
       misses: (before?.misses ?? 0) + (accepted ? 0 : 1),
+      wrongStreak: accepted ? 0 : (before?.wrongStreak ?? 0) + 1,
       // まちがえた語は早く、あたった語は遅く戻す
       dueAt: asked + (accepted ? GAP_CORRECT : GAP_WRONG),
     };
@@ -310,9 +380,14 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
       elapsedMs: Math.round(elapsedMs),
     });
 
-    // 次の語へ進む
-    app.current = null;
-    rerender();
+    // まちがえた語は、模範解答を1度書いてから次へ進む（設定で切れる）。
+    // 見ただけで進むより、手を動かしたほうが形が残る。
+    if (!accepted && app.meta.retypeOnWrong) {
+      question.phase = { kind: "retype", judgement, input, typed: "", missed: false };
+      draw();
+      return;
+    }
+    advance();
   }
 
   draw();
@@ -325,9 +400,13 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
  * 文字の ●○ だけでは何を表しているのか伝わらなかったので、
  * 「あと◯回」の短い添え字もつけている。
  *
- * @param justFilled 直前の正解で埋まった丸を目立たせる
+ * 連続してまちがえている語には、その回数を添える。丸が0個のままなのが
+ * 「まだ始めていない」のか「何度も落としている」のかを見分けられるようにする。
+ *
+ * @param justFilled  直前の正解で埋まった丸を目立たせる
+ * @param wrongStreak 連続してまちがえている回数。0 なら何も出さない。
  */
-function streakMarks(streak: number, justFilled = false): string {
+function streakMarks(streak: number, justFilled = false, wrongStreak = 0): string {
   const done = Math.min(Math.max(streak, 0), CLEAR_STREAK);
   const marks = Array.from({ length: CLEAR_STREAK }, (_, i) => {
     const on = i < done;
@@ -335,18 +414,23 @@ function streakMarks(streak: number, justFilled = false): string {
     return `<i class="${on ? "on" : ""}${fresh ? " fresh" : ""}"></i>`;
   }).join("");
   const left = CLEAR_STREAK - done;
-  return `<span class="streak">${marks}<b>${
-    left === 0 ? "クリア！" : `あと${left}回`
-  }</b></span>`;
+  // 連続でまちがえているあいだは「あと◯回」を出さない。
+  // まちがえた直後は必ず「あと3回」に戻っていて、読んでも何も分からないうえ、
+  // いま伝えたいのは「この語でつまずいている」ことのほうだから。
+  const text =
+    wrongStreak > 0
+      ? `<em class="streak-miss">${wrongStreak}回連続でミス</em>`
+      : `<b>${left === 0 ? "クリア！" : `あと${left}回`}</b>`;
+  return `<span class="streak">${marks}${text}</span>`;
 }
 
 /**
  * 判定後に、クリアまであと何回かを見せる。
  * 「惜しい」はこのあとの自己申告で結果が決まるので何も出さない。
  */
-function streakPreview(judgement: string, streak: number): string {
+function streakPreview(judgement: string, streak: number, wrongStreak: number): string {
   if (judgement === "unsure") return "";
-  if (judgement !== "correct") return streakMarks(0);
+  if (judgement !== "correct") return streakMarks(0, false, wrongStreak + 1);
   return streakMarks(streak + 1, true);
 }
 

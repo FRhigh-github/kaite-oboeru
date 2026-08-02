@@ -65,6 +65,16 @@ export async function renderSettings(
     </div>
 
     <div class="card">
+      <h3>まちがえたとき</h3>
+      <label class="toggle-row">
+        <span>模範解答を書き取ってから次へ</span>
+        <input type="checkbox" data-role="retype"
+               ${app.meta.retypeOnWrong ? "checked" : ""} />
+      </label>
+      <p class="note">正しい答えを見ながら打ち直します。打てたら自動で次に進みます。</p>
+    </div>
+
+    <div class="card">
       <h3>発音</h3>
       <label class="toggle-row">
         <span>自動で読み上げる</span>
@@ -134,6 +144,12 @@ export async function renderSettings(
     .addEventListener("change", async (e) => {
       const on = (e.target as HTMLInputElement).checked;
       app.meta = { ...app.meta, toggleInput: on };
+      await saveMeta(app.meta);
+    });
+
+  root.querySelector<HTMLInputElement>('[data-role="retype"]')!
+    .addEventListener("change", async (e) => {
+      app.meta = { ...app.meta, retypeOnWrong: (e.target as HTMLInputElement).checked };
       await saveMeta(app.meta);
     });
 

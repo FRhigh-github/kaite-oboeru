@@ -300,6 +300,53 @@ h3 {
   font-weight: 700;
 }
 
+/* 連続でまちがえている回数。丸が0個のままなのが「まだ始めていない」のか
+   「何度も落としている」のかを見分けられるようにする。 */
+.streak-miss {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--wrong);
+  color: #fff;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+/* ---------- 書き取り（まちがえた語の締め） ----------
+   判定結果の紙はそのまま出しておき、下だけキーボードに差し替える。
+   別画面に送ると解説が消えて、何を写しているのか分からなくなる。 */
+
+.result .retype-hint {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(0, 0, 0, 0.25);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.result .retype-hint.missed {
+  color: var(--wrong);
+}
+
+/* 書き取り中は読みを目立たせる。写す先がこれだと分かるように。 */
+.result.retyping .reading {
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 700;
+}
+
+/* 打ちまちがえたことを、色ではなく動きで伝える。
+   結果画面の赤とは別のもの（進めていないだけ）だと分かるようにする。 */
+.answer-display.shake {
+  animation: shake 0.3s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+
 /* ---------- 解答表示（IME を使わないので input ではない） ----------
    高さ固定。文字数が増えたら study.ts が font-size を縮めるので、
    折り返しも高さの変化も起こらず、下のキーボードが動かない。 */
@@ -341,7 +388,12 @@ h3 {
   flex-shrink: 0;
 }
 
+/* 左に余白を空けてキーボードごと右に寄せる。
+   「あ」から左（い）へフリックするには、指を左へ動かす場所が要る。
+   左端に置くと画面の縁まで動かすことになり、そもそも動かす幅が無い。
+   右列は「けす」「こたえる」でフリックしないので、右は詰めたまま。 */
 .kana-keyboard {
+  padding-left: 34px;
   user-select: none;
   touch-action: none;
 }

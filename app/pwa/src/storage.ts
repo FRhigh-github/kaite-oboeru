@@ -63,6 +63,11 @@ export interface AppMeta {
    * 切ると、中央の文字はタップ・それ以外はフリックだけで入る。
    */
   toggleInput: boolean;
+  /**
+   * まちがえた語を、模範解答の書き取りで締めるか。
+   * 書き取りが済むまで次の問題へ進まない。
+   */
+  retypeOnWrong: boolean;
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -191,6 +196,12 @@ export interface WordProgress {
   streak: number;
   /** まちがえた回数の累計（苦手な語の表示に使う） */
   misses: number;
+  /**
+   * 連続してまちがえた回数。正解したら 0 に戻る。
+   * 「この語で何回つまずいているか」を出題中に見せるために持つ。
+   * 累計の misses では、昔つまずいた語といま詰まっている語が区別できない。
+   */
+  wrongStreak?: number;
   /**
    * 次に出してよくなる時点（AppMeta.askedCount の値）。
    * 直前の解答が正解なら +GAP_CORRECT、不正解なら +GAP_WRONG 先を指す。

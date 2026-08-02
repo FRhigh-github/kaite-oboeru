@@ -98,8 +98,15 @@ const CYCLE: Record<string, string> = {
   わ: "ゎ", ゎ: "わ",
 };
 
-/** この距離(px)を超えて動かしたらフリックとみなす。 */
-const FLICK_THRESHOLD = 24;
+/**
+ * この距離(px)を超えて動かしたらフリックとみなす。
+ *
+ * 横は縦より短くしてある。左端の「あ」から左（い）、右端の列から右へは、
+ * 画面の外へ向かって指を動かすことになり、そもそも動かせる幅が足りない。
+ * 縦にも同じだけ縮めると、まっすぐ弾いたつもりの指の傾きを拾ってしまう。
+ */
+const FLICK_X = 14;
+const FLICK_Y = 20;
 const MAX_LENGTH = 24;
 
 /**
@@ -195,11 +202,16 @@ export class KanaKeyboard {
     let startX = 0;
     let startY = 0;
     let active = false;
+    /** いちばん最近はっきり出ていた方向。指を戻して離したときの拾い直しに使う。 */
+    let lastDir = 0;
 
     const directionOf = (dx: number, dy: number): number => {
-      if (Math.hypot(dx, dy) < FLICK_THRESHOLD) return 0;
-      // 横方向の移動が大きければ左右、そうでなければ上下
-      if (Math.abs(dx) > Math.abs(dy)) return dx < 0 ? 1 : 3;
+      // 縦横それぞれのしきい値で測り、超えたぶんが大きいほうの向きを採る。
+      // 距離そのもので比べると、しきい値の違いが効かなくなる。
+      const x = Math.abs(dx) / FLICK_X;
+      const y = Math.abs(dy) / FLICK_Y;
+      if (x < 1 && y < 1) return 0;
+      if (x >= y) return dx < 0 ? 1 : 3;
       return dy < 0 ? 2 : 4;
     };
 
@@ -210,6 +222,7 @@ export class KanaKeyboard {
       active = true;
       startX = e.clientX;
       startY = e.clientY;
+      lastDir = 0;
       key.setPointerCapture(e.pointerId);
       key.classList.add("kk-active");
       highlight(0);
@@ -218,7 +231,9 @@ export class KanaKeyboard {
 
     key.addEventListener("pointermove", (e) => {
       if (!active) return;
-      highlight(directionOf(e.clientX - startX, e.clientY - startY));
+      const dir = directionOf(e.clientX - startX, e.clientY - startY);
+      if (dir !== 0) lastDir = dir;
+      highlight(dir);
     });
 
     const finish = (e: PointerEvent) => {
@@ -226,7 +241,16 @@ export class KanaKeyboard {
       active = false;
       key.classList.remove("kk-active");
       preview.hidden = true;
-      const dir = directionOf(e.clientX - startX, e.clientY - startY);
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      let dir = directionOf(dx, dy);
+      // 指を弾いて離すと、離した瞬間の座標が少し戻って返ることがある。
+      // 画面の端では動かせる幅がもともと狭いので、これで判定が消えると
+      // タップ（＝中央の文字）になってしまう。半分まで戻っていなければ拾う。
+      if (dir === 0 && lastDir !== 0) {
+        const back = lastDir === 1 || lastDir === 3 ? Math.abs(dx) / FLICK_X : Math.abs(dy) / FLICK_Y;
+        if (back >= 0.5) dir = lastDir;
+      }
       // 動かさずに離したらトグル入力。はじいたらフリック入力。
       if (dir === 0) {
         this.tapToggle(keyId, flick);

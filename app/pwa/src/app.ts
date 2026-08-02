@@ -83,14 +83,14 @@ export const STREAK_WEIGHT = [4, 1.5, 0.6];
  *
  * 短すぎると直前の記憶で答えられてしまい、長すぎると忘れきってしまう。
  */
-export const GAP_WRONG = 25;
+export const GAP_WRONG = 45;
 
 /**
  * あたった語を、次に出すまで空ける問題数。
  *
  * まちがえた語より倍の間隔を置き、思い出す手間がかかる状態で再会させる。
  */
-export const GAP_CORRECT = 50;
+export const GAP_CORRECT = 90;
 
 /**
  * 一度出た語を、次に出すまで最低限空ける問題数。
@@ -98,7 +98,7 @@ export const GAP_CORRECT = 50;
  * ふだんの間隔は GAP_WRONG / GAP_CORRECT で決まる。これはその予定を守れない
  * （抱えている語が足りない）ときに、それでも守る下限。
  */
-export const COOLDOWN = 10;
+export const COOLDOWN = 16;
 
 /**
  * 同時に抱える未クリアの語数の上限。
@@ -113,6 +113,11 @@ export function streakOf(app: App, wordId: number): number {
   return app.progress.get(wordId)?.streak ?? 0;
 }
 
+/** その語で連続してまちがえている回数。正解したら 0。 */
+export function wrongStreakOf(app: App, wordId: number): number {
+  return app.progress.get(wordId)?.wrongStreak ?? 0;
+}
+
 /** その語を次に出してよくなる時点（askedCount の値）。未解答なら 0。 */
 export function dueAtOf(app: App, wordId: number): number {
   return app.progress.get(wordId)?.dueAt ?? 0;
@@ -125,7 +130,17 @@ export function isCleared(app: App, wordId: number): boolean {
 
 export type StudyPhase =
   | { kind: "asking" }
-  | { kind: "judged"; judgement: Judgement; input: string; elapsedMs: number };
+  | { kind: "judged"; judgement: Judgement; input: string; elapsedMs: number }
+  /**
+   * 模範解答の書き取り。まちがえた語だけ、記録を残したあとに通る。
+   *
+   * 判定結果の画面をそのまま出したまま、下のキーボードで打ち直させる。
+   * 別画面にすると解説が消えてしまい、何を写しているのか分からなくなる。
+   *
+   * `judgement` と `input` は結果表示を描き直すために持ち越す。
+   * `typed` が書き取り中の文字列。
+   */
+  | { kind: "retype"; judgement: Judgement; input: string; typed: string; missed: boolean };
 
 /**
  * 出題中の問題。
@@ -196,6 +211,7 @@ export async function boot(baseUrl: string): Promise<App> {
       lastBackupDay: -1,
       askedCount: 0,
       toggleInput: true,
+      retypeOnWrong: true,
     };
     await saveMeta(meta);
   }
@@ -206,7 +222,8 @@ export async function boot(baseUrl: string): Promise<App> {
     typeof meta.speechVolume !== "number" ||
     typeof meta.lastBackupDay !== "number" ||
     typeof meta.askedCount !== "number" ||
-    typeof meta.toggleInput !== "boolean"
+    typeof meta.toggleInput !== "boolean" ||
+    typeof meta.retypeOnWrong !== "boolean"
   ) {
     meta = {
       ...meta,
@@ -216,6 +233,7 @@ export async function boot(baseUrl: string): Promise<App> {
       lastBackupDay: typeof meta.lastBackupDay === "number" ? meta.lastBackupDay : -1,
       askedCount: typeof meta.askedCount === "number" ? meta.askedCount : 0,
       toggleInput: typeof meta.toggleInput === "boolean" ? meta.toggleInput : true,
+      retypeOnWrong: typeof meta.retypeOnWrong === "boolean" ? meta.retypeOnWrong : true,
     };
     await saveMeta(meta);
   }
