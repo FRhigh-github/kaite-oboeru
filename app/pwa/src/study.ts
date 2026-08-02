@@ -275,10 +275,11 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
         <div class="streak-line">${streakPreview(
           judgement,
           streak,
-          // 書き取りに入った時点で記録は書き終わっている（wrongStreak は更新済み）。
-          // 判定を出しただけの段階では、これから足される1回ぶんを見越して足す。
-          // 数え方を揃えないと、書き取り中にタブを行き来したときに増えてしまう。
-          retyping ? wrongStreak : wrongStreak + 1,
+          // 記録はそのつど読み直す。画面の先頭で控えた値だと、同じ描画の中で
+          // 書き終えた場合（不正解→そのまま書き取り）に古いままになる。
+          // 書き取りに入った時点では記録は済んでいるのでそのまま出し、
+          // 判定を出しただけの段階では、これから足される1回ぶんを見越す。
+          wrongStreakOf(app, question.wordId) + (retyping ? 0 : 1),
         )}</div>
         ${
           retyping
@@ -315,8 +316,6 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
           // 書き取りに「わからん」は無い。答えは目の前に出ている。
           false,
         );
-        // キーボードを置いたあとの、実際に残った高さで測る
-        fitPaper(container.querySelector<HTMLElement>(".result")!);
       } else if (judgement === "unsure") {
         for (const btn of container.querySelectorAll<HTMLButtonElement>("[data-self]")) {
           btn.addEventListener("click", () => void finish(btn.dataset.self === "yes"));
@@ -410,30 +409,6 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
   }
 
   draw();
-}
-
-/**
- * 紙の中身が入りきらないときだけ、収まるまで文字を縮める。
- *
- * 書き取り中はキーボードのぶんだけ紙が薄くなる。入る量は端末の高さと
- * その語の訳の長さの掛け算で決まるので、CSS で一律に決め打ちすると
- * どちらかで外れる。実際に置いてみて、はみ出したぶんだけ縮める。
- *
- * 縮めるのは紙の中の文字だけ（`--fit` を CSS 側で掛けている）。
- * 紙の外側の高さは変わらないので、下のキーボードは動かない。
- *
- * スクロールさせない理由は、写す先の読みが画面から消えてしまうため。
- * 下限を切ってもなお入らないときだけ、スクロールに逃がす。
- */
-function fitPaper(paper: HTMLElement): void {
-  const MIN = 0.5;
-  const STEP = 0.04;
-  let scale = 1;
-  paper.style.setProperty("--fit", "1");
-  while (paper.scrollHeight > paper.clientHeight + 1 && scale > MIN) {
-    scale -= STEP;
-    paper.style.setProperty("--fit", scale.toFixed(2));
-  }
 }
 
 /**
