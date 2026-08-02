@@ -188,6 +188,7 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
     initial: string,
     onChange: (v: string) => void,
     onSubmit: (v: string) => void,
+    allowGiveUp = true,
   ): void {
     // OS の IME を通さないので、漢字・カタカナへの変換が起こりえない。
     const display = container.querySelector<HTMLElement>(".answer-text")!;
@@ -203,6 +204,7 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
       },
       onSubmit,
       toggleInput: app.meta.toggleInput,
+      allowGiveUp,
     });
     keyboard.mount(container.querySelector<HTMLElement>(".keyboard-slot")!);
     // 入力途中でタブを移動しても消えないよう復元する
@@ -232,6 +234,9 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
       // 別画面に送ると解説が消えてしまい、何を写しているのか分からなくなる。
       const phase = question.phase;
       const retyping = phase.kind === "retype";
+      // 書き取り中はキーボードを出すぶん高さが要る。紙を伸ばして
+      // 余白を吸わせ、下の要素と離れないようにする（CSS 側で使う）。
+      container.classList.toggle("study-retype", retyping);
       const { judgement, input } = phase;
       const verdict =
         judgement === "correct" ? "正解" : judgement === "unsure" ? "惜しい" : "不正解";
@@ -239,7 +244,11 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
       const others = word.answers.filter((a) => a !== word.reading).slice(0, 3);
 
       container.innerHTML = `
-        ${partBar}${notice}
+        ${
+          // 書き取り中はパートのバーも呼びかけも出さない。
+          // キーボードのぶん高さが要るし、写している最中に押す場所でもない。
+          retyping ? "" : partBar + notice
+        }
         <div class="result ${judgement}${retyping ? " retyping" : ""}">
           <div class="verdict">${verdict}</div>
           <div class="word-row">
@@ -249,7 +258,10 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
           <div class="meaning">${escapeHtml(word.meaning)}</div>
           <div class="reading">${escapeHtml(word.reading)}</div>
           ${
-            others.length > 0
+            // 書き取り中は許容解を出さない。写すのは上の読みひとつなので、
+            // ほかの言い方を並べるとどれを打てばいいのか分からなくなる。
+            // 画面に入りきらずスクロールが要るようになるのも避けたい。
+            others.length > 0 && !retyping
               ? `<div class="answers">${escapeHtml(others.join(" / "))}</div>`
               : ""
           }
@@ -259,7 +271,7 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
               ? `<div class="retype-hint${phase.missed ? " missed" : ""}">${
                   phase.missed
                     ? "ちがいます。上の読みをもう一度"
-                    : "上の読みを打つと次へ進みます"
+                    : "上の読みを打って「こたえる」"
                 }</div>`
               : ""
           }
@@ -282,21 +294,23 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
 
       if (retyping) {
         // 正しく打てるまで次へ進まない。まちがえた形のまま終わらせない。
-        const done = (v: string): boolean => judge(v.trim(), [word.reading], []) === "correct";
+        //
+        // 打っている途中では判定しない。合った瞬間に画面が変わると、
+        // 打ち終える前に勝手に進んだように見えるし、書き直したい途中の
+        // 文字列がたまたま一致しただけでも先へ行ってしまう。
+        // 進むのは「こたえる」を押したときだけにする。
         mountKeyboard(
           phase.typed,
+          (v) => (phase.typed = v),
           (v) => {
-            phase.typed = v;
-            // 打ち終えた瞬間に進む。「こたえる」を押させると一手増える。
-            if (done(v)) advance();
-          },
-          (v) => {
-            if (done(v)) advance();
+            if (judge(v.trim(), [word.reading], []) === "correct") advance();
             else {
               question.phase = { ...phase, typed: v, missed: true };
               draw();
             }
           },
+          // 書き取りに「わからん」は無い。答えは目の前に出ている。
+          false,
         );
       } else if (judgement === "unsure") {
         for (const btn of container.querySelectorAll<HTMLButtonElement>("[data-self]")) {

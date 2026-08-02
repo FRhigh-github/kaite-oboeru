@@ -125,6 +125,11 @@ export interface KanaKeyboardOptions {
    * 切ると、タップは常に中央の文字を足すだけになる（フリックは変わらない）。
    */
   toggleInput?: boolean;
+  /**
+   * 空のときの送信キーを「わからん」にするか。既定はする。
+   * 書き取りのように答えが目の前に出ている場面では切る。
+   */
+  allowGiveUp?: boolean;
 }
 
 export class KanaKeyboard {
@@ -335,7 +340,7 @@ export class KanaKeyboard {
   private updateSubmitKey(): void {
     const key = this.submitKey;
     if (!key) return;
-    const empty = this.text.length === 0;
+    const empty = this.text.length === 0 && this.options.allowGiveUp !== false;
     key.textContent = empty ? GIVE_UP_LABEL : SUBMIT_LABEL;
     key.classList.toggle("kk-giveup", empty);
   }

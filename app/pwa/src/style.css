@@ -312,29 +312,6 @@ h3 {
   font-weight: 700;
 }
 
-/* ---------- 書き取り（まちがえた語の締め） ----------
-   判定結果の紙はそのまま出しておき、下だけキーボードに差し替える。
-   別画面に送ると解説が消えて、何を写しているのか分からなくなる。 */
-
-.result .retype-hint {
-  margin-top: 12px;
-  padding-top: 8px;
-  border-top: 1px dashed rgba(0, 0, 0, 0.25);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.result .retype-hint.missed {
-  color: var(--wrong);
-}
-
-/* 書き取り中は読みを目立たせる。写す先がこれだと分かるように。 */
-.result.retyping .reading {
-  color: var(--ink);
-  font-size: 22px;
-  font-weight: 700;
-}
-
 /* 打ちまちがえたことを、色ではなく動きで伝える。
    結果画面の赤とは別のもの（進めていないだけ）だと分かるようにする。 */
 .answer-display.shake {
@@ -527,6 +504,66 @@ h3 {
   overflow-y: auto;
   padding: 16px 18px;
   transform: rotate(0.4deg);
+}
+
+/* 書き取り中は紙を伸ばして余った高さを吸わせる。
+   中身のぶんだけの高さにすると、紙と入力欄のあいだが大きく空いてしまう。 */
+.study-retype .result {
+  flex: 1 1 auto;
+}
+
+/* 紙が伸びるので、丸の行を下へ押しやる必要はもう無い。
+   離すと入力欄との間がまた空く。 */
+.study-retype .streak-line {
+  margin-top: 0;
+}
+
+/* ---------- 書き取り（まちがえた語の締め） ----------
+   判定結果の紙はそのまま出しておき、下だけキーボードに差し替える。
+   別画面に送ると解説が消えて、何を写しているのか分からなくなる。
+
+   キーボードのぶん高さが減るので、紙の中身も詰める。中でスクロールさせると
+   写す読みが画面から消えてしまう。意味は文脈として添えるだけなので、
+   いちばん先に小さくする。 */
+
+.result.retyping {
+  padding: 10px 14px;
+}
+
+.result.retyping .verdict {
+  margin-bottom: 2px;
+  font-size: 16px;
+}
+
+.result.retyping .word-row {
+  margin-bottom: 2px;
+}
+
+.result.retyping .meaning {
+  font-size: 22px;
+}
+
+/* 写す先はこれだと分かるように、読みだけ本文の色で目立たせる。 */
+.result.retyping .reading {
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.result.retyping .your-input {
+  margin-top: 4px;
+}
+
+.result .retype-hint {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(0, 0, 0, 0.25);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.result .retype-hint.missed {
+  color: var(--wrong);
 }
 
 .result .verdict {
