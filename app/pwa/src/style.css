@@ -497,7 +497,7 @@ h3 {
 /* ---------- 判定結果 ---------- */
 
 /* 中身のぶんだけの高さにする。伸ばすと空の罫線ばかりの紙になってしまう。
-   余った高さは下の streak-line が吸って、ボタンは画面下に固定される。 */
+   余った高さは下のボタンとのすき間が吸う。 */
 .study .result {
   flex: 0 1 auto;
   min-height: 0;
@@ -512,10 +512,24 @@ h3 {
   flex: 1 1 auto;
 }
 
-/* 紙が伸びるので、丸の行を下へ押しやる必要はもう無い。
-   離すと入力欄との間がまた空く。 */
-.study-retype .streak-line {
-  margin-top: 0;
+/* 判定と、クリアまでの丸を1行に並べる。
+   丸を紙の外に置くと、そのぶん紙が薄くなって長い訳が入らなくなる。
+   紙の中の余っている右上へ寄せれば、1行ぶん（約50px）が紙に回る。 */
+.result .verdict-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.result .verdict-row .streak {
+  margin-bottom: 0;
+}
+
+/* 紙の上では白抜きにならない。影も要らない。 */
+.result .verdict-row .streak b {
+  color: var(--ink);
 }
 
 /* ---------- 書き取り（まちがえた語の締め） ----------
@@ -536,22 +550,22 @@ h3 {
   font-weight: 700;
 }
 
-.result .retype-hint {
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px dashed rgba(0, 0, 0, 0.25);
-  font-size: 14px;
+/* 書き取りの案内。空の入力欄の中に薄く出す。
+   紙に1行足すと、そのぶん紙が高さを食って長い訳が入らなくなる。 */
+.answer-hint {
+  color: var(--ink-dim);
+  font-size: 15px;
   font-weight: 700;
+  letter-spacing: 0;
 }
 
-.result .retype-hint.missed {
+.answer-hint.missed {
   color: var(--wrong);
 }
 
 .result .verdict {
   font-size: 20px;
   font-weight: 700;
-  margin-bottom: 8px;
 }
 .result.correct .verdict {
   color: var(--correct);
@@ -595,22 +609,11 @@ h3 {
   content: "→ ";
 }
 
-.streak-line {
-  flex-shrink: 0;
+/* 判定結果のボタンは画面の下に固定する。
+   丸の行を紙の中へ移したので、余った高さはここが吸う。 */
+.study > .self-report,
+.study > button.primary {
   margin-top: auto;
-  padding: 6px 0;
-  text-align: center;
-  color: #fff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-}
-
-.streak-line .streak {
-  margin-bottom: 0;
-}
-
-/* 「惜しい」のときは中身が空。高さは残して詰まらないようにする。 */
-.streak-line:empty {
-  padding: 0;
 }
 
 .self-report {

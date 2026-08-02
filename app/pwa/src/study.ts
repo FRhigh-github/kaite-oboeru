@@ -193,9 +193,12 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
     // OS の IME を通さないので、漢字・カタカナへの変換が起こりえない。
     const display = container.querySelector<HTMLElement>(".answer-text")!;
     const box = container.querySelector<HTMLElement>(".answer-display")!;
+    // 書き取りの案内。1文字でも打ったら引っ込める。
+    const hint = container.querySelector<HTMLElement>(".answer-hint");
     keyboard = new KanaKeyboard({
       onChange: (v) => {
         display.textContent = v;
+        if (hint) hint.hidden = v.length > 0;
         // 文字数が増えても枠の高さを変えない。
         // 折り返して縦に伸びると、その下のキーボードがずれて
         // 打っている最中に指の位置が変わってしまう。
@@ -246,7 +249,18 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
       container.innerHTML = `
         ${partBar}${notice}
         <div class="result ${judgement}${retyping ? " retyping" : ""}">
-          <div class="verdict">${verdict}</div>
+          <div class="verdict-row">
+            <span class="verdict">${verdict}</span>
+            ${streakPreview(
+              judgement,
+              streak,
+              // 記録はそのつど読み直す。画面の先頭で控えた値だと、同じ描画の中で
+              // 書き終えた場合（不正解→そのまま書き取り）に古いままになる。
+              // 書き取りに入った時点では記録は済んでいるのでそのまま出し、
+              // 判定を出しただけの段階では、これから足される1回ぶんを見越す。
+              wrongStreakOf(app, question.wordId) + (retyping ? 0 : 1),
+            )}
+          </div>
           <div class="word-row">
             <span class="result-word">${escapeHtml(word.word)}</span>
             <button class="speak-btn" data-speak aria-label="発音を聞く">🔊</button>
@@ -262,29 +276,18 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
               : ""
           }
           <div class="your-input">${input ? escapeHtml(input) : "わからん"}</div>
-          ${
-            retyping
-              ? `<div class="retype-hint${phase.missed ? " missed" : ""}">${
-                  phase.missed
-                    ? "ちがいます。上の読みをもう一度"
-                    : "上の読みを打って「こたえる」"
-                }</div>`
-              : ""
-          }
         </div>
-        <div class="streak-line">${streakPreview(
-          judgement,
-          streak,
-          // 記録はそのつど読み直す。画面の先頭で控えた値だと、同じ描画の中で
-          // 書き終えた場合（不正解→そのまま書き取り）に古いままになる。
-          // 書き取りに入った時点では記録は済んでいるのでそのまま出し、
-          // 判定を出しただけの段階では、これから足される1回ぶんを見越す。
-          wrongStreakOf(app, question.wordId) + (retyping ? 0 : 1),
-        )}</div>
         ${
           retyping
-            ? `<div class="answer-display${phase.missed ? " shake" : ""}"
+            ? // 案内は空の入力欄の中に薄く出す。紙に1行足すと、そのぶん紙が
+              // 高さを食って長い訳が入らなくなる。入力欄はどのみち空いている。
+              `<div class="answer-display${phase.missed ? " shake" : ""}"
                     aria-live="polite" aria-label="入力中の解答">
+                 <span class="answer-hint${phase.missed ? " missed" : ""}">${
+                   phase.missed
+                     ? "ちがいます。上の読みをもう一度"
+                     : "上の読みを打って「こたえる」"
+                 }</span>
                  <span class="answer-text"></span><span class="caret"></span>
                </div>
                <div class="keyboard-slot"></div>`
@@ -309,7 +312,10 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
           (v) => {
             if (judge(v.trim(), [word.reading], []) === "correct") advance();
             else {
-              question.phase = { ...phase, typed: v, missed: true };
+              // まちがえたら入力を空に戻す。案内はその空欄に出るので、
+              // 打った字を残すと「ちがいます」が隠れてしまう。
+              // 写す元は上に出ているので、打ち直す手間もたかが知れている。
+              question.phase = { ...phase, typed: "", missed: true };
               draw();
             }
           },
