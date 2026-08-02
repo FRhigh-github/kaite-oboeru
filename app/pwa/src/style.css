@@ -550,17 +550,30 @@ h3 {
   font-weight: 700;
 }
 
-/* 書き取りの案内。空の入力欄の中に薄く出す。
-   紙に1行足すと、そのぶん紙が高さを食って長い訳が入らなくなる。 */
+/* 書き取りの案内。空の入力欄の中に薄く敷く。
+   紙に1行足すと、そのぶん紙が高さを食って長い訳が入らなくなる。
+
+   **文字の流れには入れない**（絶対配置で敷く）。並べて置くと案内のぶん
+   カーソルが右へずれ、打ち始める位置が真ん中でなくなる。
+   敷いておけば、案内が出ていても打つ位置は常に枠の中央になる。 */
 .answer-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
   color: var(--ink-dim);
   font-size: 15px;
   font-weight: 700;
   letter-spacing: 0;
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 .answer-hint.missed {
   color: var(--wrong);
+  opacity: 0.75;
 }
 
 .result .verdict {
