@@ -520,50 +520,96 @@ h3 {
 
 /* ---------- 書き取り（まちがえた語の締め） ----------
    判定結果の紙はそのまま出しておき、下だけキーボードに差し替える。
-   別画面に送ると解説が消えて、何を写しているのか分からなくなる。
+   画面の作りは出題中と同じ（パートのバー・紙・入力欄・キーボード）で、
+   変わるのは紙に書いてある中身だけ。別画面に飛ばすと解説が消えて、
+   何を写しているのか分からなくなる。
 
-   キーボードのぶん高さが減るので、紙の中身も詰める。中でスクロールさせると
-   写す読みが画面から消えてしまう。意味は文脈として添えるだけなので、
-   いちばん先に小さくする。 */
+   キーボードのぶん紙が薄くなるので、中身は `--fit` 倍で縮める。
+   倍率は study.ts の fitPaper() が実際に置いてみて決める。入る量は
+   端末の高さと訳の長さの掛け算で決まるので、CSS で決め打ちすると
+   どちらかで外れる。 */
 
 .result.retyping {
-  padding: 10px 14px;
+  --fit: 1;
+  padding: calc(14px * var(--fit)) 14px;
+  line-height: 1.3;
 }
 
 .result.retyping .verdict {
-  margin-bottom: 2px;
-  font-size: 16px;
+  margin-bottom: calc(4px * var(--fit));
+  font-size: calc(17px * var(--fit));
 }
 
 .result.retyping .word-row {
-  margin-bottom: 2px;
+  margin-bottom: calc(4px * var(--fit));
+}
+
+.result.retyping .result-word {
+  font-size: calc(20px * var(--fit));
 }
 
 .result.retyping .meaning {
-  font-size: 22px;
+  font-size: calc(26px * var(--fit));
 }
 
 /* 写す先はこれだと分かるように、読みだけ本文の色で目立たせる。 */
 .result.retyping .reading {
   color: var(--ink);
-  font-size: 22px;
+  font-size: calc(24px * var(--fit));
   font-weight: 700;
 }
 
 .result.retyping .your-input {
-  margin-top: 4px;
+  margin-top: calc(8px * var(--fit));
+  font-size: calc(14px * var(--fit));
 }
 
-.result .retype-hint {
-  margin-top: 8px;
-  padding-top: 6px;
+.result.retyping .retype-hint {
+  margin-top: calc(10px * var(--fit));
+  padding-top: calc(8px * var(--fit));
   border-top: 1px dashed rgba(0, 0, 0, 0.25);
-  font-size: 13px;
+  font-size: calc(14px * var(--fit));
   font-weight: 700;
 }
 
 .result .retype-hint.missed {
   color: var(--wrong);
+}
+
+/* 発音ボタンも一緒に縮める。文字だけ小さくすると釣り合わない。 */
+.result.retyping .speak-btn {
+  width: calc(34px * var(--fit));
+  height: calc(34px * var(--fit));
+  font-size: calc(17px * var(--fit));
+}
+
+/* 背の低い端末（iPhone SE の第1世代など）では、紙だけ縮めても足りない。
+   紙のまわりも一段詰めて、紙に回せる高さを増やす。
+   ここで浮くのは40pxほどで、紙の倍率にすると2〜3段ぶんになる。 */
+@media (max-height: 640px) {
+  .study-retype .part-bar {
+    padding: 5px 12px;
+  }
+
+  .study-retype .streak-line {
+    padding: 0;
+  }
+
+  .study-retype .streak i {
+    width: 18px;
+    height: 18px;
+  }
+
+  .study-retype .answer-display {
+    height: 46px;
+    font-size: 22px;
+  }
+
+  /* 自分が打った答えは、ここまで詰めるなら落とす。
+     写す読みが画面に残るほうが大事。 */
+  .result.retyping .your-input {
+    display: none;
+  }
 }
 
 .result .verdict {

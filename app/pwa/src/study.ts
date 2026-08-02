@@ -244,11 +244,7 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
       const others = word.answers.filter((a) => a !== word.reading).slice(0, 3);
 
       container.innerHTML = `
-        ${
-          // 書き取り中はパートのバーも呼びかけも出さない。
-          // キーボードのぶん高さが要るし、写している最中に押す場所でもない。
-          retyping ? "" : partBar + notice
-        }
+        ${partBar}${notice}
         <div class="result ${judgement}${retyping ? " retyping" : ""}">
           <div class="verdict">${verdict}</div>
           <div class="word-row">
@@ -276,7 +272,14 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
               : ""
           }
         </div>
-        <div class="streak-line">${streakPreview(judgement, streak, wrongStreak)}</div>
+        <div class="streak-line">${streakPreview(
+          judgement,
+          streak,
+          // 書き取りに入った時点で記録は書き終わっている（wrongStreak は更新済み）。
+          // 判定を出しただけの段階では、これから足される1回ぶんを見越して足す。
+          // 数え方を揃えないと、書き取り中にタブを行き来したときに増えてしまう。
+          retyping ? wrongStreak : wrongStreak + 1,
+        )}</div>
         ${
           retyping
             ? `<div class="answer-display${phase.missed ? " shake" : ""}"
@@ -312,6 +315,8 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
           // 書き取りに「わからん」は無い。答えは目の前に出ている。
           false,
         );
+        // キーボードを置いたあとの、実際に残った高さで測る
+        fitPaper(container.querySelector<HTMLElement>(".result")!);
       } else if (judgement === "unsure") {
         for (const btn of container.querySelectorAll<HTMLButtonElement>("[data-self]")) {
           btn.addEventListener("click", () => void finish(btn.dataset.self === "yes"));
@@ -408,6 +413,30 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
 }
 
 /**
+ * 紙の中身が入りきらないときだけ、収まるまで文字を縮める。
+ *
+ * 書き取り中はキーボードのぶんだけ紙が薄くなる。入る量は端末の高さと
+ * その語の訳の長さの掛け算で決まるので、CSS で一律に決め打ちすると
+ * どちらかで外れる。実際に置いてみて、はみ出したぶんだけ縮める。
+ *
+ * 縮めるのは紙の中の文字だけ（`--fit` を CSS 側で掛けている）。
+ * 紙の外側の高さは変わらないので、下のキーボードは動かない。
+ *
+ * スクロールさせない理由は、写す先の読みが画面から消えてしまうため。
+ * 下限を切ってもなお入らないときだけ、スクロールに逃がす。
+ */
+function fitPaper(paper: HTMLElement): void {
+  const MIN = 0.5;
+  const STEP = 0.04;
+  let scale = 1;
+  paper.style.setProperty("--fit", "1");
+  while (paper.scrollHeight > paper.clientHeight + 1 && scale > MIN) {
+    scale -= STEP;
+    paper.style.setProperty("--fit", scale.toFixed(2));
+  }
+}
+
+/**
  * クリアまでの進み具合。
  *
  * 丸を CLEAR_STREAK 個並べ、正解したぶんだけチェックを入れる。
@@ -444,7 +473,7 @@ function streakMarks(streak: number, justFilled = false, wrongStreak = 0): strin
  */
 function streakPreview(judgement: string, streak: number, wrongStreak: number): string {
   if (judgement === "unsure") return "";
-  if (judgement !== "correct") return streakMarks(0, false, wrongStreak + 1);
+  if (judgement !== "correct") return streakMarks(0, false, wrongStreak);
   return streakMarks(streak + 1, true);
 }
 
