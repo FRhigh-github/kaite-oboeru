@@ -354,6 +354,14 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
     rerender();
   }
 
+  /**
+   * 1問ぶんの記録を残して、次の画面へ進む。
+   *
+   * **画面を先に進めてから保存する。** 保存を待ってから描き直していたときは、
+   * IndexedDB への書き込み4回ぶんのあいだ、キーボードだけ消えた解答画面が
+   * そのまま出ていて、画面が一瞬ちらついて見えた。
+   * 記録はメモリ上の状態を先に更新するので、書き込みの完了を待つ必要はない。
+   */
   async function finish(accepted: boolean): Promise<void> {
     if (question.phase.kind !== "judged") return;
     const { judgement, input, elapsedMs } = question.phase;
@@ -374,7 +382,6 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
       askedCount: asked,
       introducedToday: app.meta.introducedToday + (firstTime ? 1 : 0),
     };
-    await saveMeta(app.meta);
 
     // 連続正解数の更新。まちがえたら 0 に戻す。
     // FSRS のカード状態も引き続き更新している（出題間隔の材料として残す）が、
@@ -389,8 +396,20 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
       dueAt: asked + (accepted ? GAP_CORRECT : GAP_WRONG),
     };
     app.progress.set(question.wordId, next);
-    await saveProgress(next);
 
+    // ここまでで画面に出す材料はそろっている。先に描き替える。
+    //
+    // まちがえた語は、模範解答を1度書いてから次へ進む（設定で切れる）。
+    // 見ただけで進むより、手を動かしたほうが形が残る。
+    if (!accepted && app.meta.retypeOnWrong) {
+      question.phase = { kind: "retype", judgement, input, typed: "", missed: false };
+      draw();
+    } else {
+      advance();
+    }
+
+    await saveMeta(app.meta);
+    await saveProgress(next);
     await saveCard(updated);
     // 判定とユーザーの最終判断が食い違ったケースが、訳語改善の材料になる。
     await appendLog({
@@ -403,15 +422,6 @@ export function renderStudy(app: App, root: HTMLElement, rerender: () => void): 
       grade,
       elapsedMs: Math.round(elapsedMs),
     });
-
-    // まちがえた語は、模範解答を1度書いてから次へ進む（設定で切れる）。
-    // 見ただけで進むより、手を動かしたほうが形が残る。
-    if (!accepted && app.meta.retypeOnWrong) {
-      question.phase = { kind: "retype", judgement, input, typed: "", missed: false };
-      draw();
-      return;
-    }
-    advance();
   }
 
   draw();
