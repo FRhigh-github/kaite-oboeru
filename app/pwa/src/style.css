@@ -167,6 +167,68 @@ h3 {
   line-height: 1.2;
 }
 
+/* ---------- ホーム ----------
+   起動して最初に出る画面。いまどこまで来ているかを見せて、
+   「はじめる」からパート選択へ送る。 */
+
+.home {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.home-head {
+  margin-bottom: 16px;
+  color: #fff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.45);
+}
+
+.home-title {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.home-day {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.home-part-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.home-label {
+  color: var(--ink-dim);
+  font-size: 13px;
+}
+
+.home-part-name {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+/* 進み具合の行は、この画面では下の余白が要らない */
+.home-part .bar-row {
+  margin-bottom: 0;
+}
+
+.home-of {
+  font-size: 15px;
+  color: var(--text-dim, var(--ink-dim));
+}
+
+/* ボタンは画面の下に置く。親指の届くところで待たせる。 */
+.home-start {
+  margin-top: auto;
+  padding: 18px;
+  font-size: 19px;
+}
+
 /* ---------- 出題 ----------
    1画面に収める。余った高さは .question が吸う。 */
 

@@ -180,6 +180,14 @@ export interface App {
    * 同じ「学習」タブの中で切り替える。
    */
   partPickerOpen: boolean;
+  /**
+   * ホーム画面を出しているか。起動直後だけ true。
+   *
+   * 開いた瞬間に問題が出ていると、いきなり答えさせられている感じになる。
+   * 「はじめる」を押してからパートを選び、そこから学習に入る。
+   * 一度はじめたら、そのあとは学習画面のまま（いつも通り）。
+   */
+  homeOpen: boolean;
 }
 
 function randomSeed(): number {
@@ -270,6 +278,7 @@ export async function boot(baseUrl: string): Promise<App> {
     answeredThisSession: 0,
     backupNoticeClosed: false,
     partPickerOpen: false,
+    homeOpen: true,
     current: null,
   };
   return app;

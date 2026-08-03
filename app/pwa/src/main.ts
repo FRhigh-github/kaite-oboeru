@@ -4,6 +4,7 @@ import { registerSW } from "virtual:pwa-register";
 import { boot, type App } from "./app.ts";
 import { renderStudy } from "./study.ts";
 import { renderGroups } from "./groups.ts";
+import { renderHome } from "./home.ts";
 import { renderStats } from "./stats.ts";
 import { renderSettings } from "./settings.ts";
 import { initSpeech } from "./speech.ts";
@@ -62,19 +63,29 @@ function render(): void {
 
   // 出題画面だけは1画面に収める。指の位置を変えずに答え続けられるよう、
   // スクロールで問題やキーボードが動かないようにする。
-  const fixedHeight = currentView === "study" && !app.partPickerOpen;
+  const fixedHeight = currentView === "study" && !app.partPickerOpen && !app.homeOpen;
   view.classList.toggle("fixed", fixedHeight);
 
   switch (currentView) {
     case "study":
-      if (app.partPickerOpen) renderGroups(app, view, render);
+      // ホーム →（はじめる）→ パート選択 →（選ぶ）→ 学習。
+      // 学習に入ったあとは、このタブはずっと学習画面のまま。
+      if (app.homeOpen) renderHome(app, view, render);
+      else if (app.partPickerOpen) renderGroups(app, view, render);
       else renderStudy(app, view, render);
       break;
+    // 統計と設定は保存領域を読んでから描くので、描き終わったときには
+    // 別のタブに移っているかもしれない。そのまま書き込むと、移った先の
+    // 画面を上書きしてしまうので、ずれていたら描き直す。
     case "stats":
-      void renderStats(app, view);
+      void renderStats(app, view).then(() => {
+        if (currentView !== "stats") render();
+      });
       break;
     case "settings":
-      void renderSettings(app, view, BASE, reload);
+      void renderSettings(app, view, BASE, reload).then(() => {
+        if (currentView !== "settings") render();
+      });
       break;
   }
 }

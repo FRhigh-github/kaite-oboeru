@@ -15,7 +15,7 @@ import { saveMeta } from "./storage.ts";
  * わけではない。あくまで「どこまで覚えたか」の見当をつけるための目安として、
  * 断定を避けた表現にしてある。
  */
-const LEVELS: { tier: string; name: string; goal: string }[] = [
+export const LEVELS: { tier: string; name: string; goal: string }[] = [
   { tier: "part1", name: "基礎", goal: "TOEIC 500点" },
   { tier: "part2", name: "標準", goal: "TOEIC 700点" },
   { tier: "part3", name: "上級", goal: "TOEIC 800点" },

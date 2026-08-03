@@ -68,6 +68,7 @@ app/vocab-core/              UI 非依存の TypeScript ロジック層
   src/verify.ts              Python 実装との差分テスト
 app/pwa/                     アプリ本体 (PWA)
   src/app.ts                 状態の組み立て
+  src/home.ts                ホーム画面（起動して最初に出る）
   src/study.ts               出題画面
   src/kana-keyboard.ts       ひらがな専用キーボード
   src/storage.ts             IndexedDB 永続化
