@@ -1,0 +1,179 @@
+<!doctype html>
+<!--
+  og:image（SNS でリンクを貼ったときに出る画像）を作るための画面。
+
+  ビルドには関わりません。作り直したいときだけ、開発サーバーで
+  /scripts/make-og.html を開き、「保存」を押して public/og.jpg に置き換えます。
+
+  画像は Canvas で描いています。アプリ本体と同じく画像素材を持たないためで、
+  デザインを直したいときはこのファイルだけを直せば済みます。
+  背景のコルクは粒を描かず平らにしてあります。粒は PNG の圧縮が効かず、
+  ファイルが数百KBに膨らむわりに、縮小表示される OGP では見えません。
+-->
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>og:image を作る</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 20px;
+        background: #333;
+        color: #eee;
+        font-family: system-ui, sans-serif;
+      }
+      canvas {
+        width: 600px;
+        height: 315px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      }
+      p {
+        font-size: 13px;
+        line-height: 1.7;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="og" width="1200" height="630"></canvas>
+    <p>
+      <a id="save" download="og.jpg">この画像を保存</a>
+      — <code>app/pwa/public/og.jpg</code> に置き換えてください
+    </p>
+
+    <script>
+      const W = 1200;
+      const H = 630;
+      const INK = "#1c1a17";
+      const INK_DIM = "#6f6a62";
+      const PAPER = "#fffdf6";
+
+      const c = document.getElementById("og");
+      const g = c.getContext("2d");
+
+      const FONT =
+        '"Zen Maru Gothic", "Hiragino Maru Gothic ProN", "Yu Gothic UI", Meiryo, sans-serif';
+
+      /** 角丸の矩形。paper/card の見た目を1か所にまとめる。 */
+      function roundRect(x, y, w, h, r) {
+        g.beginPath();
+        g.moveTo(x + r, y);
+        g.arcTo(x + w, y, x + w, y + h, r);
+        g.arcTo(x + w, y + h, x, y + h, r);
+        g.arcTo(x, y + h, x, y, r);
+        g.arcTo(x, y, x + w, y, r);
+        g.closePath();
+      }
+
+      // --- コルクの下地 ---------------------------------------------------
+      g.fillStyle = "#c69c6d";
+      g.fillRect(0, 0, W, H);
+      const vignette = g.createRadialGradient(W / 2, H / 2, 120, W / 2, H / 2, W * 0.62);
+      vignette.addColorStop(0, "rgba(255,235,200,0.16)");
+      vignette.addColorStop(1, "rgba(90,55,20,0.30)");
+      g.fillStyle = vignette;
+      g.fillRect(0, 0, W, H);
+
+      // --- 紙 -------------------------------------------------------------
+      const PX = 96;
+      const PY = 92;
+      const PW = W - PX * 2;
+      const PH = H - PY * 2;
+
+      g.save();
+      g.translate(W / 2, H / 2);
+      g.rotate((-0.6 * Math.PI) / 180);
+      g.translate(-W / 2, -H / 2);
+
+      g.shadowColor = "rgba(50,28,8,0.45)";
+      g.shadowBlur = 26;
+      g.shadowOffsetY = 10;
+      g.fillStyle = PAPER;
+      roundRect(PX, PY, PW, PH, 6);
+      g.fill();
+      g.shadowColor = "transparent";
+      g.shadowBlur = 0;
+      g.shadowOffsetY = 0;
+
+      // 罫線
+      g.strokeStyle = "#dfe6f0";
+      g.lineWidth = 2;
+      for (let y = PY + 74; y < PY + PH - 20; y += 74) {
+        g.beginPath();
+        g.moveTo(PX + 1, y);
+        g.lineTo(PX + PW - 1, y);
+        g.stroke();
+      }
+
+      // --- かなキーボードの断片 -------------------------------------------
+      // 「入力で答えさせる」ことが一目で伝わるように、キーを何個か描く。
+      // 先に場所を決めて、文字の行がここへ食い込まないようにする。
+      const keys = [
+        ["あ", "か", "さ"],
+        ["た", "な", "こたえる"],
+      ];
+      const KW = 80;
+      const KH = 62;
+      const KG = 10;
+      const KX = PX + PW - (KW * 3 + KG * 2) - 66;
+      const KY = PY + PH - (KH * 2 + KG) - 46;
+
+      // --- 文字 -----------------------------------------------------------
+      const TX = PX + 66;
+
+      g.fillStyle = INK_DIM;
+      g.font = `500 30px ${FONT}`;
+      g.textBaseline = "alphabetic";
+      g.fillText("英単語", TX, PY + 92);
+
+      g.fillStyle = INK;
+      g.font = `700 100px ${FONT}`;
+      g.fillText("書いて覚える", TX, PY + 200);
+
+      g.fillStyle = INK;
+      g.font = `700 32px ${FONT}`;
+      g.fillText("選択肢を出さない。ひらがなで書く。", TX, PY + 276);
+
+      g.fillStyle = INK_DIM;
+      g.font = `500 26px ${FONT}`;
+      g.fillText("大学受験レベル 1,883語 ・ オフラインで動く", TX, PY + 330);
+
+      keys.forEach((row, r) => {
+        row.forEach((label, i) => {
+          const x = KX + i * (KW + KG);
+          const y = KY + r * (KH + KG);
+          const submit = label === "こたえる";
+          g.fillStyle = submit ? "#2f6df0" : "#f4efe2";
+          g.strokeStyle = submit ? "transparent" : "rgba(60,35,10,0.35)";
+          g.lineWidth = 2;
+          roundRect(x, y, KW, KH, 5);
+          g.fill();
+          if (!submit) g.stroke();
+          g.fillStyle = submit ? "#fff" : INK;
+          g.font = submit ? `700 18px ${FONT}` : `500 34px ${FONT}`;
+          g.textAlign = "center";
+          g.textBaseline = "middle";
+          g.fillText(label, x + KW / 2, y + KH / 2 + 2);
+          g.textAlign = "left";
+          g.textBaseline = "alphabetic";
+        });
+      });
+
+      g.restore();
+
+      // --- 画鋲 -----------------------------------------------------------
+      const pin = g.createRadialGradient(W / 2 - 5, PY - 14, 2, W / 2, PY - 9, 18);
+      pin.addColorStop(0, "#ff8a7d");
+      pin.addColorStop(0.6, "#e0453a");
+      pin.addColorStop(1, "#9c2b22");
+      g.fillStyle = pin;
+      g.beginPath();
+      g.arc(W / 2, PY - 9, 17, 0, Math.PI * 2);
+      g.fill();
+
+      // JPEG で書き出す。背景のぼかしと影があるので PNG だと 400KB を超えるが、
+      // JPEG なら 70KB に収まる。SNS が縮小して表示する画像なので、
+      // この画質で足りる。
+      document.getElementById("save").href = c.toDataURL("image/jpeg", 0.92);
+    </script>
+  </body>
+</html>
